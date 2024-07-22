@@ -114,7 +114,24 @@ public class Properties
 
         return false;
     }
+    /**
+     * Return propertyName as an integer, defaultValue used if not defined.
+     *
+     * @param propertyName name of property.
+     * @param defaultValue integer to return if property not defined.
+     * @return value of property, or default if not found, as an int.
+     */
+    public static int asInteger(String propertyName, int defaultValue)
+    {
+        String p = getPropertyValue(propertyName);
 
+        if (p != null)
+        {
+            return Integer.parseInt(p);
+        }
+
+        return defaultValue;
+    }
     public static BigInteger asBigInteger(String propertyName)
     {
         String p = getPropertyValue(propertyName);

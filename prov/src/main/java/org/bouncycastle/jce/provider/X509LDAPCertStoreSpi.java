@@ -398,12 +398,14 @@ public class X509LDAPCertStoreSpi
     private static String[] FILTER_ESCAPE_TABLE = new String['\\' + 1];
 
 
-    static {
+    static
+    {
 
         // Filter encoding table -------------------------------------
 
         // fill with char itself
-        for (char c = 0; c < FILTER_ESCAPE_TABLE.length; c++) {
+        for (char c = 0; c < FILTER_ESCAPE_TABLE.length; c++)
+        {
             FILTER_ESCAPE_TABLE[c] = String.valueOf(c);
         }
 
@@ -433,14 +435,17 @@ public class X509LDAPCertStoreSpi
 
         int length = value.length();
 
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < length; i++)
+        {
 
             char c = value.charAt(i);
 
-            if (c < FILTER_ESCAPE_TABLE.length) {
+            if (c < FILTER_ESCAPE_TABLE.length)
+            {
                 encodedValue.append(FILTER_ESCAPE_TABLE[c]);
             }
-            else {
+            else
+            {
                 // default: add the char
                 encodedValue.append(c);
             }

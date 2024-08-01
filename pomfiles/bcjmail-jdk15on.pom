@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.bouncycastle</groupId>
+  <artifactId>bcjmail-jdk15on</artifactId>
+  <packaging>jar</packaging>
+  <name>Bouncy Castle Jakarta S/MIME API</name>
+  <version>${version}</version>
+  <description>The Bouncy Castle Java S/MIME APIs for handling S/MIME protocols. This jar contains S/MIME APIs for JDK 1.5 and up. The APIs can be used in conjunction with a JCE/JCA provider such as the one provided with the Bouncy Castle Cryptography APIs. The Jakarta Mail API and the Jakarta activation framework will also be needed.</description>
+  <url>https://www.bouncycastle.org/java.html</url>
+  <licenses>
+    <license>
+      <name>Bouncy Castle Licence</name>
+      <url>https://www.bouncycastle.org/licence.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <scm>
+    <url>https://github.com/lineaje-labs-gos/bc-java</url>
+  </scm>
+  <issueManagement>
+     <system>GitHub</system>
+     <url>https://github.com/lineaje-labs-gos/bc-java/issues</url>
+  </issueManagement>
+  <developers>
+    <developer>
+      <id>lineaje-support</id>
+      <name>Lineaje support</name>
+      <email>support@lineaje.com</email>
+    </developer>
+  </developers>
+  <dependencies>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk15on</artifactId>
+      <version>${version}</version>
+      <type>jar</type>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcutil-jdk15on</artifactId>
+      <version>${version}</version>
+      <type>jar</type>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcpkix-jdk15on</artifactId>
+      <version>${version}</version>
+      <type>jar</type>
+    </dependency>
+    <dependency>
+        <groupId>jakarta.mail</groupId>
+        <artifactId>jakarta.mail-api</artifactId>
+        <version>[2.0,3.0)</version>
+    </dependency>
+    <dependency>
+        <groupId>jakarta.activation</groupId>
+        <artifactId>jakarta.activation-api</artifactId>
+        <version>[2.0,3.0)</version>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>3.2.4</version>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase> <!-- Ensure signing happens before deploy phase -->
+            <goals>
+              <goal>sign-and-deploy-file</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <!-- Prevent gpg from using pinentry programs -->
+          <gpgArguments>
+            <arg>--pinentry-mode</arg>
+            <arg>loopback</arg>
+          </gpgArguments>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

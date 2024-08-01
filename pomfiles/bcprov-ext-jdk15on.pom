@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.bouncycastle</groupId>
+  <artifactId>bcprov-ext-jdk15on</artifactId>
+  <packaging>jar</packaging>
+  <name>Bouncy Castle Provider</name>
+  <version>${version}</version>
+  <description>The Bouncy Castle Crypto package is a Java implementation of cryptographic algorithms. This jar contains JCE provider and lightweight API for the Bouncy Castle Cryptography APIs for JDK 1.5 and up. Note: this package includes the NTRU encryption algorithms.</description>
+  <url>https://www.bouncycastle.org/java.html</url>
+  <licenses>
+    <license>
+      <name>Bouncy Castle Licence</name>
+      <url>https://www.bouncycastle.org/licence.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <scm>
+    <url>https://github.com/lineaje-labs-gos/bc-java</url>
+  </scm>
+  <developers>
+    <developer>
+      <id>lineaje-support</id>
+      <name>Lineaje support</name>
+      <email>support@lineaje.com</email>
+    </developer>
+  </developers>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>3.2.4</version>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase> <!-- Ensure signing happens before deploy phase -->
+            <goals>
+              <goal>sign-and-deploy-file</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <!-- Prevent gpg from using pinentry programs -->
+          <gpgArguments>
+            <arg>--pinentry-mode</arg>
+            <arg>loopback</arg>
+          </gpgArguments>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

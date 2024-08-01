@@ -1,0 +1,9 @@
+<settings>
+  <servers>
+    <server>
+      <id>nexus-write</id>
+      <username>${nexus_username}</username>
+      <password>${nexus_password}</password>
+    </server>
+  </servers>
+</settings>

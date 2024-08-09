@@ -467,7 +467,6 @@ public class X509LDAPCertStoreSpi
                        String[] attrs) throws CertStoreException
     {
         String filter = attributeName + "=" + filterEncode(attributeValue);
-        System.out.println(filter);
         if (attributeName == null)
         {
             filter = null;

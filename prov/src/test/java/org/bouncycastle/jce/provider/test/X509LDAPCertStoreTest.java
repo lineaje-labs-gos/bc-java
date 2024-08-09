@@ -4,6 +4,7 @@ import org.bouncycastle.jce.PrincipalUtil;
 import org.bouncycastle.jce.X509LDAPCertStoreParameters;
 import org.bouncycastle.jce.X509Principal;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.provider.X509LDAPCertStoreSpi;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.test.SimpleTest;
 import org.bouncycastle.x509.X509CRLStoreSelector;
@@ -11,6 +12,9 @@ import org.bouncycastle.x509.X509CertStoreSelector;
 import org.bouncycastle.x509.X509Store;
 
 import java.io.ByteArrayInputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.Security;
 import java.security.cert.CRLException;
 import java.security.cert.CertStore;
@@ -212,6 +216,7 @@ public class X509LDAPCertStoreTest extends SimpleTest
     {
         certStoretest();
         x509StoreTest();
+        filterEncodeTest();
     }
 
     private void certStoretest() throws Exception
@@ -452,6 +457,24 @@ public class X509LDAPCertStoreTest extends SimpleTest
         throws CRLException
     {
         return PrincipalUtil.getIssuerX509Principal(crl);
+    }
+
+    private void filterEncodeTest() throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, InvalidAlgorithmParameterException
+    {
+        X509LDAPCertStoreParameters.Builder builder = new X509LDAPCertStoreParameters.Builder();
+        X509LDAPCertStoreParameters certStoreParams = builder.build();
+        Class<?> x509ldap = X509LDAPCertStoreSpi.class;
+        Method filterEnc = x509ldap.getDeclaredMethod("filterEncode", String.class);
+        filterEnc.setAccessible(true);
+
+        Object result = filterEnc.invoke(new X509LDAPCertStoreSpi(certStoreParams), "Bouncy");
+        isEquals("Bouncy", result);
+
+        result = filterEnc.invoke(new X509LDAPCertStoreSpi(certStoreParams), "*Bouncy(Castle)\\");
+        isEquals("\\2aBouncy\\28Castle\\29\\5c", result);
+
+        result = filterEnc.invoke(new X509LDAPCertStoreSpi(certStoreParams), "\0BouncyCastle");
+        isEquals("\\00BouncyCastle", result);
     }
 
     public String getName()

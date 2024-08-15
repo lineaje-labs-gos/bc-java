@@ -38,11 +38,9 @@ jobs:
       with:
         java-version: '8'
         distribution: 'temurin'
-        server-id: nexus # Value of the distributionManagement/repository/id field of the pom.xml
+        server-id: artifactory # Value of the distributionManagement/repository/id field of the pom.xml
         settings-path: ${{ github.workspace }} # location for the settings.xml file
         overwrite-settings: false
-        server-username: ${{ secrets.NEXUS_USERNAME }}
-        server-password: ${{ secrets.NEXUS_PASSWORD }}
         gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }} # Value of the GPG private key to import
         gpg-passphrase: MAVEN_GPG_PASSPHRASE # env variable for GPG private key passphrase
 
@@ -65,9 +63,9 @@ jobs:
 
     - name: Upload Artifacts to Nexus
       env:
-        NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        NEXUS_URL: ${{ secrets.NEXUS_URL }}
+        JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+        JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}
+        JFROG_URL: ${{ secrets.JFROG_URL }}
         MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       working-directory: ${{ github.workspace }}
       run: |
@@ -75,6 +73,6 @@ jobs:
         do
           echo "Processing component ${i}"
           sed -i 's/${version}/'"${pkg_version}"'/g' pomfiles/${i}.pom
-          mvn gpg:sign-and-deploy-file -s settings.xml -DrepositoryId=nexus-write -Durl=$NEXUS_URL -Dnexus_username=$NEXUS_USERNAME -Dnexus_password=$NEXUS_PASSWORD -DgroupId=org.bouncycastle -DartifactId=${i} -Dversion=${pkg_version} -DpomFile=pomfiles/${i}.pom -Dfile=build/artifacts/jdk1.5/jars/"${i}"-"${pkg_version}".jar
+          mvn gpg:sign-and-deploy-file -s settings.xml -DrepositoryId=artifactory-write -Durl=$JFROG_URL -Dartifactory_username=$JFROG_USERNAME -Dartifactory_password=$JFROG_PASSWORD -DgroupId=org.bouncycastle -DartifactId=${i} -Dversion=${pkg_version} -DpomFile=pomfiles/${i}.pom -Dfile=build/artifacts/jdk1.5/jars/"${i}"-"${pkg_version}".jar
         done
 

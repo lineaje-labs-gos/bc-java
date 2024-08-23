@@ -61,7 +61,7 @@ jobs:
     - name: Set Package version required for upload
       run: echo "pkg_version=$(cat bc-build.properties | grep release.version | awk -F ':' '{print $2}' | sed -e 's/ //g')" >> $GITHUB_ENV
 
-    - name: Upload Artifacts to Nexus
+    - name: Upload Artifacts to JFrog
       env:
         JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
         JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}

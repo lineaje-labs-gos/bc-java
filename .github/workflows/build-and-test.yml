@@ -44,4 +44,6 @@ jobs:
         path: build/artifacts/jdk1.5/jars/*.jar
         retention-days: 5
 
+    - name: Run Unit tests
+      run: bash ./build15+ test
 

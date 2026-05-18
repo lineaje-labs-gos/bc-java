@@ -35,6 +35,8 @@ import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.DERTaggedObject;
+import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
+import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.internal.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.jce.interfaces.ECPublicKey;
@@ -1783,6 +1785,106 @@ public class CertTest
         isTrue("collection not empty", certs2.isEmpty());
     }
 
+    /**
+     * GM/T 0010-2012 SM2 SignedData ContentType (1.2.156.10197.6.1.4.2.2)
+     * shares the SignedData ASN.1 structure with PKCS#7 SignedData, so
+     * CertificateFactory.generateCertificate{s} / generateCRL{s} must extract
+     * embedded certificates and CRLs from it just like a PKCS#7 wrapper
+     * (github #1355).
+     */
+    private void sm2SignedDataTestIssue1355()
+        throws Exception
+    {
+        ASN1EncodableVector certs = new ASN1EncodableVector();
+        certs.add(new ASN1InputStream(CertPathTest.rootCertBin).readObject());
+
+        ASN1EncodableVector crls = new ASN1EncodableVector();
+        crls.add(new ASN1InputStream(CertPathTest.rootCrlBin).readObject());
+
+        // Inner content type uses the GM/T 0010 SM2 data OID (parallel to PKCS#7 data).
+        SignedData sigData = new SignedData(new DERSet(),
+            new ContentInfo(GMObjectIdentifiers.sm2_pkcs7_data, null),
+            new DERSet(certs), new DERSet(crls), new DERSet());
+
+        // Outer ContentInfo carries the SM2 SignedData ContentType.
+        ContentInfo info = new ContentInfo(GMObjectIdentifiers.sm2_pkcs7_signedData, sigData);
+
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", "BC");
+
+        X509Certificate cert = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(info.getEncoded()));
+        if (cert == null || !areEqual(cert.getEncoded(), certs.get(0).toASN1Primitive().getEncoded()))
+        {
+            fail("SM2 SignedData cert not read");
+        }
+        X509CRL crl = (X509CRL)cf.generateCRL(new ByteArrayInputStream(info.getEncoded()));
+        if (crl == null || !areEqual(crl.getEncoded(), crls.get(0).toASN1Primitive().getEncoded()))
+        {
+            fail("SM2 SignedData crl not read");
+        }
+
+        Collection col = cf.generateCertificates(new ByteArrayInputStream(info.getEncoded()));
+        if (col.size() != 1 || !col.contains(cert))
+        {
+            fail("SM2 SignedData cert collection not right");
+        }
+        col = cf.generateCRLs(new ByteArrayInputStream(info.getEncoded()));
+        if (col.size() != 1 || !col.contains(crl))
+        {
+            fail("SM2 SignedData crl collection not right");
+        }
+    }
+
+    /**
+     * RFC 5280 sec. 4.2.1.12 permits extendedKeyUsage to be marked critical.
+     * Loading a cert with critical EKU through the BC CertificateFactory
+     * must report hasUnsupportedCriticalExtension() == false (matching the
+     * JDK provider), since the BC X509Certificate fully implements
+     * getExtendedKeyUsage() (github #1796).
+     */
+    private void testCriticalEkuIssue1796()
+        throws Exception
+    {
+        byte[] criticalEkuCert = Base64.decode(
+            "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");
+
+        CertificateFactory fact = CertificateFactory.getInstance("X.509", "BC");
+        X509Certificate cert = (X509Certificate)fact.generateCertificate(
+            new ByteArrayInputStream(criticalEkuCert));
+
+        isTrue("EKU not in critical OIDs",
+            cert.getCriticalExtensionOIDs().contains(Extension.extendedKeyUsage.getId()));
+        isTrue("critical EKU must be reported as supported",
+            !cert.hasUnsupportedCriticalExtension());
+    }
+
     public void performTest()
         throws Exception
     {
@@ -1872,6 +1974,10 @@ public class CertTest
         checkCertificate(18, emptyDNCert);
 
         testCertPathEncAvailableTest();
+
+        testCriticalEkuIssue1796();
+
+        sm2SignedDataTestIssue1355();
     }
 
     public static void main(

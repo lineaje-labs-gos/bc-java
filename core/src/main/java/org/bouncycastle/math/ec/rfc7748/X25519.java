@@ -5,6 +5,48 @@ import java.security.SecureRandom;
 import org.bouncycastle.math.ec.rfc8032.Ed25519;
 import org.bouncycastle.util.Arrays;
 
+/**
+ * A low-level implementation of X25519 (RFC 7748).
+ * <p>
+ * <b>Algorithm map.</b>
+ * <ul>
+ *   <li>{@link #generatePrivateKey} &mdash; 32 random bytes followed by
+ *       {@link #clampPrivateKey} (RFC 7748 sec. 5 clamping: clear bits
+ *       254..255 then 0..2, set bit 254).</li>
+ *   <li>{@link #generatePublicKey} / {@link #scalarMultBase} &mdash;
+ *       computed as {@code k * B} on the birationally-equivalent
+ *       {@code edwards25519} curve via
+ *       {@link Ed25519#scalarMultBaseYZ(Friend, byte[], int, int[], int[])}
+ *       (a signed multi-comb in extended Edwards coordinates), then
+ *       converted to the curve25519 {@code u} coordinate using the RFC
+ *       7748 sec. 4.1 birational map {@code u = (1 + Y) / (1 - Y)}
+ *       where {@code Y = y / z}.</li>
+ *   <li>{@link #scalarMult} (key agreement) &mdash; Montgomery ladder on
+ *       XZ-only projective coordinates per RFC 7748 sec. 5, with
+ *       per-bit constant-time {@code cswap}; the
+ *       {@code A24 = (A + 2) / 4} curve constant is precomputed from
+ *       {@code A = 486662}. The final three doublings correspond to the
+ *       always-cleared low bits of the scalar; these clear the cofactor
+ *       to ensure a non-twist result.</li>
+ *   <li>{@link #calculateAgreement} &mdash; {@link #scalarMult} followed
+ *       by the RFC 7748 sec. 6.1 all-zero rejection.</li>
+ * </ul>
+ * <p>
+ * <b>Side-channel scope.</b> Secret-scalar operations are written to be
+ * constant-time at the Java level: the Montgomery ladder in
+ * {@link #scalarMult} performs identical field operations per bit with
+ * branchless {@code cswap}; {@link #scalarMultBase} routes through the
+ * Ed25519 signed-comb, which walks all precomputed entries with mask-based
+ * {@code cmov} rather than a secret-indexed array load and applies
+ * conditional negation by XOR-with-mask; the final modular inverse uses
+ * constant-time {@code Mod.modOddInverse}. The all-zero rejection in
+ * {@link #calculateAgreement} runs an OR-accumulator and only leaks the
+ * RFC-mandated public rejection criterion. This is sufficient against a
+ * remote network timing attacker but is not a substitute for a constant-time
+ * native implementation against a co-located cache-line-resolution
+ * adversary &mdash; JVM-level timing variance from JIT, GC and cache
+ * eviction is not addressable in pure Java.
+ */
 public abstract class X25519
 {
     public static class Friend
@@ -30,20 +72,23 @@ public abstract class X25519
         return !Arrays.areAllZeroes(r, rOff, POINT_SIZE);
     }
 
-    private static int decode32(byte[] bs, int off)
+    public static void clampPrivateKey(byte[] k)
     {
-        int n = bs[off] & 0xFF;
-        n |= (bs[++off] & 0xFF) << 8;
-        n |= (bs[++off] & 0xFF) << 16;
-        n |=  bs[++off]         << 24;
-        return n;
+        if (k.length != SCALAR_SIZE)
+        {
+            throw new IllegalArgumentException("k");
+        }
+
+        k[0] &= 0xF8;
+        k[SCALAR_SIZE - 1] &= 0x7F;
+        k[SCALAR_SIZE - 1] |= 0x40;
     }
 
     private static void decodeScalar(byte[] k, int kOff, int[] n)
     {
         for (int i = 0; i < 8; ++i)
         {
-            n[i] = decode32(k, kOff + i * 4);
+            n[i] = F.decode32(k, kOff + i * 4);
         }
 
         n[0] &= 0xFFFFFFF8;
@@ -60,9 +105,7 @@ public abstract class X25519
 
         random.nextBytes(k);
 
-        k[0] &= 0xF8;
-        k[SCALAR_SIZE - 1] &= 0x7F;
-        k[SCALAR_SIZE - 1] |= 0x40;
+        clampPrivateKey(k);
     }
 
     public static void generatePublicKey(byte[] k, int kOff, byte[] r, int rOff)
@@ -94,7 +137,7 @@ public abstract class X25519
     {
         int[] n = new int[8];       decodeScalar(k, kOff, n);
 
-        int[] x1 = F.create();      F.decode(u, uOff, x1);
+        int[] x1 = F.create();      F.decode255(u, uOff, x1, 0);
         int[] x2 = F.create();      F.copy(x1, 0, x2, 0);
         int[] z2 = F.create();      z2[0] = 1;
         int[] x3 = F.create();      x3[0] = 1;
@@ -164,6 +207,9 @@ public abstract class X25519
 
         Ed25519.scalarMultBaseYZ(Friend.INSTANCE, k, kOff, y, z);
 
+        // Birational map edwards25519 -> curve25519 (RFC 7748 sec. 4.1):
+        //   u = (1 + Y) / (1 - Y),  where Y = y / z.
+        // Computed projectively: y' := z + y, z' := z - y, then u = y' / z'.
         F.apm(z, y, y, z);
 
         F.inv(z, z);

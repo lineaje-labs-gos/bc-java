@@ -39,16 +39,16 @@ public class FalconTest
             FalconParameters.falcon_1024
         };
 
-        TestSampler sampler = new TestSampler();
-
         for (int fileindex = 0; fileindex < files.length; fileindex++)
         {
             String name = files[fileindex];
-            // System.out.println("testing: " + name);
+
             InputStream src = TestResourceFinder.findTestResource("pqc/crypto/falcon", name);
             BufferedReader bin = new BufferedReader(new InputStreamReader(src));
+
             String line = null;
             HashMap<String, String> buf = new HashMap<String, String>();
+            TestSampler sampler = new TestSampler();
             while ((line = bin.readLine()) != null)
             {
                 line = line.trim();
@@ -141,34 +141,88 @@ public class FalconTest
             // System.out.println("testing successful!");
         }
     }
-    
-    public void testFalconRandom()
+
+    public void testRandom()
+        throws Exception
     {
-        byte[] msg = Strings.toByteArray("Hello World!");
-        FalconKeyPairGenerator keyGen = new FalconKeyPairGenerator();
-
         SecureRandom random = new SecureRandom();
+        byte[] msg = Strings.toByteArray("Hello World!");
 
+        FalconKeyPairGenerator keyGen = new FalconKeyPairGenerator();
         keyGen.init(new FalconKeyGenerationParameters(random, FalconParameters.falcon_512));
 
-        for (int i = 0; i != 100; i++)
+        for (int i = 0; i < 10; ++i)
         {
             AsymmetricCipherKeyPair keyPair = keyGen.generateKeyPair();
 
-            // sign
+            FalconPrivateKeyParameters privParams = (FalconPrivateKeyParameters)keyPair.getPrivate();
+            FalconPublicKeyParameters pubParams = (FalconPublicKeyParameters)keyPair.getPublic();
+
+            privParams = (FalconPrivateKeyParameters)PrivateKeyFactory.createKey(
+                PrivateKeyInfoFactory.createPrivateKeyInfo(privParams));
+            pubParams = (FalconPublicKeyParameters)PublicKeyFactory.createKey(
+                SubjectPublicKeyInfoFactory.createSubjectPublicKeyInfo(pubParams));
+            
+            for (int j = 0; j < 10; ++j)
+            {
+                // sign
+                FalconSigner signer = new FalconSigner();
+                signer.init(true, new ParametersWithRandom(privParams, random));
+                byte[] signature = signer.generateSignature(msg);
+    
+                // verify
+                FalconSigner verifier = new FalconSigner();
+                verifier.init(false, pubParams);
+                boolean verified = verifier.verifySignature(msg, signature);
+
+                assertTrue("count = " + i, verified);
+            }
+        }
+    }
+
+    /**
+     * github #2297: FalconPrivateKeyParameters.getPublicKeyParameters()
+     * should return a FalconPublicKeyParameters whose encoded form matches
+     * the keypair's original public key, and a signature produced under
+     * the private key must verify under the recovered public key.
+     */
+    public void testPublicKeyRecoveryFromPrivateKey()
+        throws Exception
+    {
+        SecureRandom random = new SecureRandom();
+        byte[] msg = Strings.toByteArray("recover me");
+
+        FalconParameters[] parameters = new FalconParameters[]{
+            FalconParameters.falcon_512,
+            FalconParameters.falcon_1024
+        };
+
+        for (int p = 0; p < parameters.length; p++)
+        {
+            FalconKeyPairGenerator keyGen = new FalconKeyPairGenerator();
+            keyGen.init(new FalconKeyGenerationParameters(random, parameters[p]));
+            AsymmetricCipherKeyPair kp = keyGen.generateKeyPair();
+
+            FalconPrivateKeyParameters priv = (FalconPrivateKeyParameters)kp.getPrivate();
+            FalconPublicKeyParameters pubFromKpg = (FalconPublicKeyParameters)kp.getPublic();
+
+            FalconPublicKeyParameters recovered = priv.getPublicKeyParameters();
+
+            assertEquals("parameter set mismatch on recovered public key",
+                priv.getParameters(), recovered.getParameters());
+            assertTrue("recovered public-key bytes don't match keypair output for "
+                + parameters[p].getName(),
+                org.bouncycastle.util.Arrays.areEqual(pubFromKpg.getH(), recovered.getH()));
+
             FalconSigner signer = new FalconSigner();
-            FalconPrivateKeyParameters skparam = (FalconPrivateKeyParameters)keyPair.getPrivate();
-            ParametersWithRandom skwrand = new ParametersWithRandom(skparam, random);
-            signer.init(true, skwrand);
+            signer.init(true, new ParametersWithRandom(priv, random));
+            byte[] signature = signer.generateSignature(msg);
 
-            byte[] sigGenerated = signer.generateSignature(msg);
-
-            // verify
             FalconSigner verifier = new FalconSigner();
-            FalconPublicKeyParameters pkparam = (FalconPublicKeyParameters)keyPair.getPublic();
-            verifier.init(false, pkparam);
-
-            assertTrue("count = " + i, verifier.verifySignature(msg, sigGenerated));
+            verifier.init(false, recovered);
+            assertTrue("signature did not verify under recovered public key for "
+                + parameters[p].getName(),
+                verifier.verifySignature(msg, signature));
         }
     }
 }

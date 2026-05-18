@@ -7,8 +7,13 @@ import org.bouncycastle.bcpg.SignatureSubpacketTags;
 import org.bouncycastle.util.Strings;
 
 /**
- * Class provided a NotationData object according to
- * RFC2440, Chapter 5.2.3.15. Notation Data
+ * Signature Subpacket encoding custom notations.
+ * Notations are key-value pairs.
+ *
+ * @see <a href="https://datatracker.ietf.org/doc/html/rfc4880#section-5.2.3.16">
+ *     RFC4880 - Notation Data</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9580.html#name-notation-data">
+ *     RFC9580 - Notation Data</a>
  */
 public class NotationData
     extends SignatureSubpacket
@@ -22,7 +27,7 @@ public class NotationData
         boolean isLongLength,
         byte[] data)
     {
-        super(SignatureSubpacketTags.NOTATION_DATA, critical, isLongLength, data);
+        super(SignatureSubpacketTags.NOTATION_DATA, critical, isLongLength, verifyData(data));
     }
 
     public NotationData(
@@ -34,6 +39,21 @@ public class NotationData
         super(SignatureSubpacketTags.NOTATION_DATA, critical, false, createData(humanReadable, notationName, notationValue));
     }
 
+    private static byte[] verifyData(byte[] data)
+    {
+        if (data.length < 8)
+        {
+            throw new IllegalArgumentException("Malformed notation data encoding (too short): " + data.length);
+        }
+        int nameLength = (((data[HEADER_FLAG_LENGTH] & 0xff) << 8) + (data[HEADER_FLAG_LENGTH + 1] & 0xff));
+        int valueLength = (((data[HEADER_FLAG_LENGTH + HEADER_NAME_LENGTH] & 0xff) << 8) + (data[HEADER_FLAG_LENGTH + HEADER_NAME_LENGTH + 1] & 0xff));
+        if (nameLength + valueLength + 4 > data.length)
+        {
+            throw new IllegalArgumentException("Malformed notation data encoding.");
+        }
+        return data;
+    }
+    
     private static byte[] createData(boolean humanReadable, String notationName, String notationValue)
     {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -86,7 +106,7 @@ public class NotationData
 
     public boolean isHumanReadable()
     {
-        return data[0] == (byte)0x80;
+        return (data[0] & 0x80) != 0;
     }
 
     public String getNotationName()

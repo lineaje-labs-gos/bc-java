@@ -31,7 +31,10 @@ public class PublicSubkeyPacket
      * @param algorithm
      * @param time
      * @param key
+     * @deprecated use versioned {@link #PublicSubkeyPacket(int, int, Date, BCPGKey)} instead
      */
+    @Deprecated
+    @SuppressWarnings("InlineMeSuggester")
     public PublicSubkeyPacket(
         int       algorithm,
         Date      time,

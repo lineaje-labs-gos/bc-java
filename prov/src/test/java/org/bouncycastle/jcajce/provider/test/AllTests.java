@@ -24,6 +24,7 @@ public class AllTests
 
         suite.addTestSuite(ECAlgorithmParametersTest.class);
         suite.addTestSuite(GeneralKeyTest.class);
+        suite.addTestSuite(LEATest.class);
         suite.addTestSuite(HybridRandomProviderTest.class);
         suite.addTestSuite(PrivateConstructorTest.class);
         suite.addTestSuite(RandomTest.class);
@@ -32,6 +33,8 @@ public class AllTests
         suite.addTestSuite(CompositeKeyTest.class);
         suite.addTestSuite(CompositeSignaturesTest.class);
         suite.addTestSuite(BouncyCastleProviderTest.class);
+        suite.addTestSuite(PQCSignatureTest.class);
+        suite.addTestSuite(SecretKeyUtilTest.class);
 
         return new BCTestSetup(suite);
     }

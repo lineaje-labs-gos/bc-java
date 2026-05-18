@@ -5,10 +5,13 @@ import java.io.IOException;
 import org.bouncycastle.util.Arrays;
 
 /**
- * Packet representing AEAD encrypted data. At the moment this appears to exist in the following
+ * Packet representing non-standard, LibrePGP OCB (AEAD) encrypted data. At the moment this appears to exist in the following
  * expired draft only, but it's appearing despite this.
+ * For standardized, interoperable OpenPGP AEAD encrypted data, see {@link SymmetricEncIntegrityPacket} of version
+ * {@link SymmetricEncIntegrityPacket#VERSION_2}.
  *
- * @ref https://datatracker.ietf.org/doc/html/draft-ietf-openpgp-rfc4880bis-04#section-5.16
+ * @see  <a href="https://www.ietf.org/archive/id/draft-koch-librepgp-00.html#name-ocb-encrypted-data-packet-t">
+ *     LibrePGP - OCB Encrypted Data Packet</a>
  */
 public class AEADEncDataPacket
     extends InputStreamPacket
@@ -37,20 +40,40 @@ public class AEADEncDataPacket
         version = (byte)in.read();
         if (version != VERSION_1)
         {
-            throw new IllegalArgumentException("wrong AEAD packet version: " + version);
+            throw new UnsupportedPacketVersionException("Unknown AEAD packet version: " + version);
         }
 
         algorithm = (byte)in.read();
         aeadAlgorithm = (byte)in.read();
         chunkSize = (byte)in.read();
 
-        iv = new byte[AEADUtils.getIVLength(aeadAlgorithm)];
+        // RFC 9580 - 5.13.2
+        if (chunkSize < 0 || chunkSize > 16)
+        {
+            throw new MalformedPacketException("chunkSize out of range");
+        }
+
+        try
+        {
+            int ivLen = AEADUtils.getIVLength(aeadAlgorithm);
+            iv = new byte[ivLen];
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new MalformedPacketException("Unknown AEAD algorithm ID: " + aeadAlgorithm, e);
+        }
         in.readFully(iv);
     }
 
     public AEADEncDataPacket(int algorithm, int aeadAlgorithm, int chunkSize, byte[] iv)
     {
         super(null, AEAD_ENC_DATA);
+
+        // RFC 9580 - 5.13.2
+        if (chunkSize < 0 || chunkSize > 16)
+        {
+            throw new IllegalArgumentException("chunkSize out of range");
+        }
 
         this.version = VERSION_1;
         this.algorithm = (byte)algorithm;
@@ -64,6 +87,10 @@ public class AEADEncDataPacket
         return version;
     }
 
+    /**
+     * Return the algorithm-id of the symmetric encryption algorithm used to encrypt the data.
+     * @return symmetric encryption algorithm
+     */
     public byte getAlgorithm()
     {
         return algorithm;

@@ -2,6 +2,8 @@ package org.bouncycastle.asn1;
 
 import java.io.IOException;
 
+import org.bouncycastle.util.Exceptions;
+
 /**
  * A NULL object - use DERNull.INSTANCE for populating structures.
  */
@@ -12,7 +14,7 @@ public abstract class ASN1Null
     {
         ASN1Primitive fromImplicitPrimitive(DEROctetString octetString)
         {
-            return createPrimitive(octetString.getOctets());
+            return createPrimitive(octetString.getOctetsLength());            
         }
     };
 
@@ -46,16 +48,21 @@ public abstract class ASN1Null
             }
             catch (IOException e)
             {
-                throw new IllegalArgumentException("failed to construct NULL from byte[]: " + e.getMessage());
+                throw Exceptions.illegalArgumentException("failed to construct NULL from byte[]", e);
             }
         }
 
         return null;
     }
 
-    public static ASN1Null getInstance(ASN1TaggedObject taggedObject, boolean explicit)
+    public static ASN1Null getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
     {
-        return (ASN1Null)TYPE.getContextInstance(taggedObject, explicit);
+        return (ASN1Null)TYPE.getContextTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1Null getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1Null)TYPE.getTagged(taggedObject, declaredExplicit);
     }
 
     ASN1Null()
@@ -83,12 +90,22 @@ public abstract class ASN1Null
          return "NULL";
     }
 
-    static ASN1Null createPrimitive(byte[] contents)
+    private static void checkContentsLength(int contentsLength)
     {
-        if (0 != contents.length)
+        if (0 != contentsLength)
         {
             throw new IllegalStateException("malformed NULL encoding encountered");
         }
-        return DERNull.INSTANCE;
     }
+
+    static ASN1Null createPrimitive(DefiniteLengthInputStream defIn) throws IOException
+    {
+        return createPrimitive(defIn.getRemaining());
+    }
+
+    private static ASN1Null createPrimitive(int contentsLength)
+    {
+        checkContentsLength(contentsLength);
+        return DERNull.INSTANCE;
+    }    
 }

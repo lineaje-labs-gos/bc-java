@@ -37,7 +37,7 @@ import java.util.Vector;
 
 import javax.security.auth.x500.X500Principal;
 
-import org.bouncycastle.asn1.ASN1Encodable;
+import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1Enumerated;
 import org.bouncycastle.asn1.ASN1IA5String;
 import org.bouncycastle.asn1.ASN1InputStream;
@@ -47,7 +47,6 @@ import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.ASN1TaggedObject;
-import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x509.AccessDescription;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
@@ -75,6 +74,7 @@ import org.bouncycastle.jce.provider.AnnotatedException;
 import org.bouncycastle.jce.provider.PKIXNameConstraintValidator;
 import org.bouncycastle.jce.provider.PKIXNameConstraintValidatorException;
 import org.bouncycastle.jce.provider.PKIXPolicyNode;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Integers;
 import org.bouncycastle.util.Objects;
 
@@ -91,7 +91,9 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
     private static final String AUTH_INFO_ACCESS = Extension.authorityInfoAccess.getId();
     
     private static final String RESOURCE_NAME = "org.bouncycastle.x509.CertPathReviewerMessages";
-    
+
+    private static final int NAME_CHECK_MAX = (1 << 10);
+
     // input parameters
     
     protected CertPath certPath;
@@ -169,7 +171,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             }
             catch (GeneralSecurityException e)
             {
-                throw new IllegalStateException("unable to rebuild certpath");
+                throw Exceptions.illegalStateException("unable to rebuild certpath", e);
             }
             this.certs = certs;
         }
@@ -501,9 +503,15 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                         ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.subjAltNameExtError");
                         throw new CertPathReviewerException(msg,ae,certPath,index);
                     }
-                    
+
                     if (altName != null)
                     {
+                        if (altName.size() > NAME_CHECK_MAX)
+                        {
+                            ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.subjAltNameExtError");
+                            throw new CertPathReviewerException(msg,certPath,index);
+                        }
+
                         for (int j = 0; j < altName.size(); j++)
                         {
                             GeneralName name = GeneralName.getInstance(altName.getObjectAt(j));
@@ -519,87 +527,6 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
                                         new Object[] {new UntrustedInput(name)});
                                 throw new CertPathReviewerException(msg,cpve,certPath,index);
                             }
-//                            switch(o.getTagNo())            TODO - move resources to PKIXNameConstraints
-//                            {
-//                            case 1:
-//                                String email = ASN1IA5String.getInstance(o, true).getString();
-//
-//                                try
-//                                {
-//                                    checkPermittedEmail(permittedSubtreesEmail, email);
-//                                }
-//                                catch (CertPathValidatorException cpve)
-//                                {
-//                                    ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.notPermittedEmail",
-//                                            new Object[] {new UntrustedInput(email)});
-//                                    throw new CertPathReviewerException(msg,cpve,certPath,index);
-//                                }
-//
-//                                try
-//                                {
-//                                    checkExcludedEmail(excludedSubtreesEmail, email);
-//                                }
-//                                catch (CertPathValidatorException cpve)
-//                                {
-//                                    ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.excludedEmail",
-//                                            new Object[] {new UntrustedInput(email)});
-//                                    throw new CertPathReviewerException(msg,cpve,certPath,index);
-//                                }
-//
-//                                break;
-//                            case 4:
-//                                ASN1Sequence altDN = ASN1Sequence.getInstance(o, true);
-//
-//                                try
-//                                {
-//                                    checkPermittedDN(permittedSubtreesDN, altDN);
-//                                }
-//                                catch (CertPathValidatorException cpve)
-//                                {
-//                                    X509Name altDNName = new X509Name(altDN);
-//                                    ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.notPermittedDN",
-//                                            new Object[] {new UntrustedInput(altDNName)});
-//                                    throw new CertPathReviewerException(msg,cpve,certPath,index);
-//                                }
-//
-//                                try
-//                                {
-//                                    checkExcludedDN(excludedSubtreesDN, altDN);
-//                                }
-//                                catch (CertPathValidatorException cpve)
-//                                {
-//                                    X509Name altDNName = new X509Name(altDN);
-//                                    ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.excludedDN",
-//                                            new Object[] {new UntrustedInput(altDNName)});
-//                                    throw new CertPathReviewerException(msg,cpve,certPath,index);
-//                                }
-//
-//                                break;
-//                            case 7:
-//                                byte[] ip = ASN1OctetString.getInstance(o, true).getOctets();
-//
-//                                try
-//                                {
-//                                    checkPermittedIP(permittedSubtreesIP, ip);
-//                                }
-//                                catch (CertPathValidatorException cpve)
-//                                {
-//                                    ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.notPermittedIP",
-//                                            new Object[] {IPtoString(ip)});
-//                                    throw new CertPathReviewerException(msg,cpve,certPath,index);
-//                                }
-//
-//                                try
-//                                {
-//                                    checkExcludedIP(excludedSubtreesIP, ip);
-//                                }
-//                                catch (CertPathValidatorException cpve)
-//                                {
-//                                    ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.excludedIP",
-//                                            new Object[] {IPtoString(ip)});
-//                                    throw new CertPathReviewerException(msg,cpve,certPath,index);
-//                                }
-//                            }
                         }
                     }
                 }
@@ -841,8 +768,6 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         X509Certificate sign = null;
 
         AlgorithmIdentifier workingAlgId = null;
-        ASN1ObjectIdentifier workingPublicKeyAlgorithm = null;
-        ASN1Encodable workingPublicKeyParameters = null;
 
         if (trust != null)
         {
@@ -860,8 +785,6 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             try
             {
                 workingAlgId = getAlgorithmIdentifier(workingPublicKey);
-                workingPublicKeyAlgorithm = workingAlgId.getAlgorithm();
-                workingPublicKeyParameters = workingAlgId.getParameters();
             }
             catch (CertPathValidatorException ex)
             {
@@ -925,11 +848,11 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             {
                 ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.NoIssuerPublicKey");
                 // if there is an authority key extension add the serial and issuer of the missing certificate
-                byte[] akiBytes = cert.getExtensionValue(Extension.authorityKeyIdentifier.getId());
-                if (akiBytes != null)
+                byte[] akiExtValue = cert.getExtensionValue(Extension.authorityKeyIdentifier.getId());
+                if (akiExtValue != null)
                 {
                     AuthorityKeyIdentifier aki = AuthorityKeyIdentifier.getInstance(
-                        DEROctetString.getInstance(akiBytes).getOctets());
+                        ASN1OctetString.getInstance(akiExtValue).getOctets());
                     GeneralNames issuerNames = aki.getAuthorityCertIssuer();
                     if (issuerNames != null)
                     {
@@ -1107,16 +1030,12 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
             {
                 workingPublicKey = getNextWorkingKey(certs, index);
                 workingAlgId = getAlgorithmIdentifier(workingPublicKey);
-                workingPublicKeyAlgorithm = workingAlgId.getAlgorithm();
-                workingPublicKeyParameters = workingAlgId.getParameters();
             }
             catch (CertPathValidatorException ex)
             {
                 ErrorBundle msg = new ErrorBundle(RESOURCE_NAME,"CertPathReviewer.pubKeyError");
                 addError(msg,index);
                 workingAlgId = null;
-                workingPublicKeyAlgorithm = null;
-                workingPublicKeyParameters = null;
             }
 
         } // for
@@ -2025,7 +1944,7 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         }
         catch (Exception e)
         {
-            StringBuffer b = new StringBuffer();
+            StringBuilder b = new StringBuilder();
             
             for (int i = 0; i != ip.length; i++)
             {
@@ -2508,25 +2427,25 @@ public class PKIXCertPathReviewer extends CertPathValidatorUtilities
         try
         {
             certSelectX509.setSubject(getEncodedIssuerPrincipal(cert).getEncoded());
-            byte[] ext = cert.getExtensionValue(Extension.authorityKeyIdentifier.getId());
 
-            if (ext != null)
+            byte[] akiExtValue = cert.getExtensionValue(Extension.authorityKeyIdentifier.getId());
+            if (akiExtValue != null)
             {
-                ASN1OctetString oct = (ASN1OctetString)ASN1Primitive.fromByteArray(ext);
-                AuthorityKeyIdentifier authID = AuthorityKeyIdentifier.getInstance(ASN1Primitive.fromByteArray(oct.getOctets()));
+                AuthorityKeyIdentifier aki = AuthorityKeyIdentifier.getInstance(
+                    ASN1OctetString.getInstance(akiExtValue).getOctets());
 
                 // we ignore key identifier as if set, selector expects parent to have subjectKeyID
-                BigInteger serial = authID.getAuthorityCertSerialNumber();
+                BigInteger serial = aki.getAuthorityCertSerialNumber();
                 if (serial != null)
                 {
-                    certSelectX509.setSerialNumber(authID.getAuthorityCertSerialNumber());
+                    certSelectX509.setSerialNumber(aki.getAuthorityCertSerialNumber());
                 }
                 else
                 {
-                    byte[] keyID = authID.getKeyIdentifier();
-                    if (keyID != null)
+                    ASN1OctetString keyIdentifier = aki.getKeyIdentifierObject();
+                    if (keyIdentifier != null)
                     {
-                        certSelectX509.setSubjectKeyIdentifier(new DEROctetString(keyID).getEncoded());
+                        certSelectX509.setSubjectKeyIdentifier(keyIdentifier.getEncoded(ASN1Encoding.DER));
                     }
                 }
             }

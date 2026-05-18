@@ -53,16 +53,23 @@ public class ASN1Enumerated
      * return an Enumerated from a tagged object.
      *
      * @param taggedObject the tagged object holding the object we want
-     * @param explicit true if the object is meant to be explicitly
+     * @param declaredExplicit true if the object is meant to be explicitly
      *              tagged false otherwise.
      * @exception IllegalArgumentException if the tagged object cannot
      *               be converted.
      * @return an ASN1Enumerated instance, or null.
      */
-    public static ASN1Enumerated getInstance(ASN1TaggedObject taggedObject, boolean explicit)
+    public static ASN1Enumerated getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
     {
-        return (ASN1Enumerated)TYPE.getContextInstance(taggedObject, explicit);
+        return (ASN1Enumerated)TYPE.getContextTagged(taggedObject, declaredExplicit);
     }
+
+    public static ASN1Enumerated getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1Enumerated)TYPE.getTagged(taggedObject, declaredExplicit);
+    }
+
+    private static final ASN1Enumerated[] CACHE = new ASN1Enumerated[16];
 
     private final byte[] contents;
     private final int start;
@@ -187,33 +194,55 @@ public class ASN1Enumerated
         return Arrays.hashCode(contents);
     }
 
-    private static final ASN1Enumerated[] cache = new ASN1Enumerated[12];
-
-    static ASN1Enumerated createPrimitive(byte[] contents, boolean clone)
+    private static ASN1Enumerated createPrimitive(byte[] contents, boolean clone)
     {
-        if (contents.length > 1)
+        int length = contents.length;
+        if (length > 1)
         {
             return new ASN1Enumerated(contents, clone);
         }
-
-        if (contents.length == 0)
+        if (length == 0)
         {
             throw new IllegalArgumentException("ENUMERATED has zero length");
         }
-        int value = contents[0] & 0xff;
 
-        if (value >= cache.length)
+        int value = contents[0] & 0xFF;
+        if (value >= CACHE.length)
         {
             return new ASN1Enumerated(contents, clone);
         }
 
-        ASN1Enumerated possibleMatch = cache[value];
-
+        ASN1Enumerated possibleMatch = CACHE[value];
         if (possibleMatch == null)
         {
-            possibleMatch = cache[value] = new ASN1Enumerated(contents, clone);
+            CACHE[value] = possibleMatch = new ASN1Enumerated(contents, clone);
+        }
+        return possibleMatch;
+    }
+
+    static ASN1Enumerated createPrimitive(DefiniteLengthInputStream defIn) throws IOException
+    {
+        int length = defIn.getRemaining();
+        if (length > 1)
+        {
+            return new ASN1Enumerated(defIn.toByteArray(), false);
+        }
+        if (length == 0)
+        {
+            throw new IllegalArgumentException("ENUMERATED has zero length");
         }
 
+        int value = defIn.read();
+        if (value >= CACHE.length)
+        {
+            return new ASN1Enumerated(value);
+        }
+
+        ASN1Enumerated possibleMatch = CACHE[value];
+        if (possibleMatch == null)
+        {
+            CACHE[value] = possibleMatch = new ASN1Enumerated(value);
+        }
         return possibleMatch;
     }
 }

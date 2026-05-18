@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -117,14 +118,19 @@ public abstract class ASN1OctetString
      * return an Octet String from a tagged object.
      *
      * @param taggedObject the tagged object holding the object we want.
-     * @param explicit true if the object is meant to be explicitly
+     * @param declaredExplicit true if the object is meant to be explicitly
      *              tagged false otherwise.
      * @exception IllegalArgumentException if the tagged object cannot
      *              be converted.
      */
-    public static ASN1OctetString getInstance(ASN1TaggedObject taggedObject, boolean explicit)
+    public static ASN1OctetString getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
     {
-        return (ASN1OctetString)TYPE.getContextInstance(taggedObject, explicit);
+        return (ASN1OctetString)TYPE.getContextTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1OctetString getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1OctetString)TYPE.getTagged(taggedObject, declaredExplicit);
     }
 
     /**
@@ -156,7 +162,7 @@ public abstract class ASN1OctetString
             }
             catch (IOException e)
             {
-                throw new IllegalArgumentException("failed to construct OCTET STRING from byte[]: " + e.getMessage());
+                throw Exceptions.illegalArgumentException("failed to construct OCTET STRING from byte[]", e);
             }
         }
 

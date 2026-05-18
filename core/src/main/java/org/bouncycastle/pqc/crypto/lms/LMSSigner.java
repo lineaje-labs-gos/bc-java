@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.pqc.crypto.MessageSigner;
+import org.bouncycastle.util.Exceptions;
 
 public class LMSSigner
     implements MessageSigner
@@ -15,11 +16,41 @@ public class LMSSigner
     {
          if (forSigning)
          {
-             privKey = (LMSPrivateKeyParameters)param;
+             if (param instanceof HSSPrivateKeyParameters)
+             {
+                 HSSPrivateKeyParameters hssPriv = (HSSPrivateKeyParameters)param;
+                 if (hssPriv.getL() == 1)
+                 {
+                     privKey = hssPriv.getRootKey();
+                 }
+                 else
+                 {
+                     throw new IllegalArgumentException("only a single level HSS key can be used with LMS");
+                 }
+             }
+             else
+             {
+                 privKey = (LMSPrivateKeyParameters)param;
+             }
          }
          else
          {
-             pubKey = (LMSPublicKeyParameters)param;
+             if (param instanceof HSSPublicKeyParameters)
+             {
+                 HSSPublicKeyParameters hssPub = (HSSPublicKeyParameters)param;
+                 if (hssPub.getL() == 1)
+                 {
+                     pubKey = hssPub.getLMSPublicKey();
+                 }
+                 else
+                 {
+                     throw new IllegalArgumentException("only a single level HSS key can be used with LMS");
+                 }
+             }
+             else
+             {
+                 pubKey = (LMSPublicKeyParameters)param;
+             }
          }
     }
 
@@ -31,7 +62,7 @@ public class LMSSigner
         }
         catch (IOException e)
         {
-            throw new IllegalStateException("unable to encode signature: " + e.getMessage());
+            throw Exceptions.illegalStateException("unable to encode signature", e);
         }
     }
 
@@ -43,7 +74,7 @@ public class LMSSigner
         }
         catch (IOException e)
         {
-            throw new IllegalStateException("unable to decode signature: " + e.getMessage());
+            throw Exceptions.illegalStateException("unable to decode signature", e);
         }
     }
 }

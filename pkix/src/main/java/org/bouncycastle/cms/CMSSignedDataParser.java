@@ -28,6 +28,7 @@ import org.bouncycastle.asn1.BERTaggedObject;
 import org.bouncycastle.asn1.BERTags;
 import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.DERTaggedObject;
+import org.bouncycastle.asn1.DLSet;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.cms.ContentInfoParser;
 import org.bouncycastle.asn1.cms.SignedDataParser;
@@ -83,6 +84,19 @@ import org.bouncycastle.util.io.Streams;
  *          CMSSignedDataParser     ep = new CMSSignedDataParser(new BufferedInputStream(encapSigData, bufSize));
  *  </pre>
  *  where bufSize is a suitably large buffer size.
+ * <p>
+ * <b>Stream handling note:</b>
+ * <ul>
+ *   <li>The constructor reads only enough of the supplied InputStream to expose the
+ *       digest algorithms and signed-content metadata. The encapsulated content
+ *       must be drained by the caller (e.g.
+ *       {@link #getSignedContent()}.{@link CMSTypedStream#drain drain()}) before
+ *       calling {@link #getSignerInfos()} so the running digests can be finalized.</li>
+ *   <li>The supplied InputStream is <b>not closed automatically</b>. Call
+ *       {@link #close()} on this parser (inherited from
+ *       {@link CMSContentInfoParser}) to close the underlying InputStream, or close
+ *       it yourself.</li>
+ * </ul>
  */
 public class CMSSignedDataParser
     extends CMSContentInfoParser
@@ -357,6 +371,38 @@ public class CMSSignedDataParser
         return HELPER.getOtherRevocationInfo(otherRevocationInfoFormat, _crlSet);
     }
 
+    /**
+     * Return the raw <code>certificates</code> field as parsed from the wire,
+     * preserving every choice (X.509 SEQUENCE, attribute certificate
+     * <code>[1]</code>, other <code>[2]</code>) in original encoding order.
+     * Null if the field was absent. Forces a populate of the cert/CRL sets
+     * (which is harmless to call multiple times). Use this when the wire
+     * order or non-X.509 choices matter; otherwise prefer {@link #getCertificates()}.
+     */
+    public ASN1Set getCertificateSet()
+        throws CMSException
+    {
+        populateCertCrlSets();
+
+        return _certSet;
+    }
+
+    /**
+     * Return the raw <code>crls</code> field as parsed from the wire,
+     * preserving every choice (CertificateList, other revocation info
+     * <code>[1]</code>) in original encoding order. Null if the field was
+     * absent. Forces a populate of the cert/CRL sets. Use this when the
+     * wire order or non-CertificateList choices matter; otherwise prefer
+     * {@link #getCRLs()} or {@link #getOtherRevocationInfo}.
+     */
+    public ASN1Set getCRLSet()
+        throws CMSException
+    {
+        populateCertCrlSets();
+
+        return _crlSet;
+    }
+
     private void populateCertCrlSets()
         throws CMSException
     {
@@ -438,27 +484,17 @@ public class CMSSignedDataParser
         // digests
         signedData.getDigestAlgorithms().toASN1Primitive();  // skip old ones
 
-        ASN1EncodableVector digestAlgs = new ASN1EncodableVector();
-
-        for (Iterator it = signerInformationStore.getSigners().iterator(); it.hasNext();)
+        Set<AlgorithmIdentifier> digestAlgs = new HashSet<AlgorithmIdentifier>();
+        for (Iterator it = signerInformationStore.getSigners().iterator(); it.hasNext(); )
         {
             SignerInformation signer = (SignerInformation)it.next();
+            CMSUtils.addDigestAlgs(digestAlgs, signer, dgstAlgFinder);
             digestAlgs.add(HELPER.fixDigestAlgID(signer.getDigestAlgorithmID(), dgstAlgFinder));
         }
+        AlgorithmIdentifier[] newDigestAlgIds = (AlgorithmIdentifier[])digestAlgs.toArray(new AlgorithmIdentifier[digestAlgs.size()]);
+        sigGen.addObject(new DLSet(newDigestAlgIds));
 
-        sigGen.getRawOutputStream().write(new DERSet(digestAlgs).getEncoded());
-
-        // encap content info
-        ContentInfoParser encapContentInfo = signedData.getEncapContentInfo();
-
-        BERSequenceGenerator eiGen = new BERSequenceGenerator(sigGen.getRawOutputStream());
-
-        eiGen.addObject(encapContentInfo.getContentType());
-
-        pipeEncapsulatedOctetString(encapContentInfo, eiGen.getRawOutputStream());
-
-        eiGen.close();
-
+        writeEncapContentInfoToGenerator(signedData, sigGen);
 
         writeSetToGeneratorTagged(sigGen, signedData.getCertificates(), 0);
         writeSetToGeneratorTagged(sigGen, signedData.getCrls(), 1);
@@ -472,7 +508,7 @@ public class CMSSignedDataParser
             signerInfos.add(signer.toASN1Structure());
         }
 
-        sigGen.getRawOutputStream().write(new DERSet(signerInfos).getEncoded());
+        sigGen.addObject(new DERSet(signerInfos));
 
         sigGen.close();
 
@@ -517,18 +553,9 @@ public class CMSSignedDataParser
         sigGen.addObject(signedData.getVersion());
 
         // digests
-        sigGen.getRawOutputStream().write(signedData.getDigestAlgorithms().toASN1Primitive().getEncoded());
+        sigGen.addObject(signedData.getDigestAlgorithms());
 
-        // encap content info
-        ContentInfoParser encapContentInfo = signedData.getEncapContentInfo();
-
-        BERSequenceGenerator eiGen = new BERSequenceGenerator(sigGen.getRawOutputStream());
-
-        eiGen.addObject(encapContentInfo.getContentType());
-
-        pipeEncapsulatedOctetString(encapContentInfo, eiGen.getRawOutputStream());
-
-        eiGen.close();
+        writeEncapContentInfoToGenerator(signedData, sigGen);
 
         //
         // skip existing certs and CRLs
@@ -556,7 +583,7 @@ public class CMSSignedDataParser
 
             if (asn1Certs.size() > 0)
             {
-                sigGen.getRawOutputStream().write(new DERTaggedObject(false, 0, asn1Certs).getEncoded());
+                sigGen.addObject(new DERTaggedObject(false, 0, asn1Certs));
             }
         }
 
@@ -566,11 +593,11 @@ public class CMSSignedDataParser
 
             if (asn1Crls.size() > 0)
             {
-                sigGen.getRawOutputStream().write(new DERTaggedObject(false, 1, asn1Crls).getEncoded());
+                sigGen.addObject(new DERTaggedObject(false, 1, asn1Crls));
             }
         }
 
-        sigGen.getRawOutputStream().write(signedData.getSignerInfos().toASN1Primitive().getEncoded());
+        sigGen.addObject(signedData.getSignerInfos());
 
         sigGen.close();
 
@@ -579,7 +606,7 @@ public class CMSSignedDataParser
         return out;
     }
 
-    private static void writeSetToGeneratorTagged(
+    static void writeSetToGeneratorTagged(
         ASN1Generator asn1Gen,
         ASN1SetParser asn1SetParser,
         int           tagNo)
@@ -591,11 +618,11 @@ public class CMSSignedDataParser
         {
             if (asn1SetParser instanceof BERSetParser)
             {
-                asn1Gen.getRawOutputStream().write(new BERTaggedObject(false, tagNo, asn1Set).getEncoded());
+                new BERTaggedObject(false, tagNo, asn1Set).encodeTo(asn1Gen.getRawOutputStream());
             }
             else
             {
-                asn1Gen.getRawOutputStream().write(new DERTaggedObject(false, tagNo, asn1Set).getEncoded());
+                new DERTaggedObject(false, tagNo, asn1Set).encodeTo(asn1Gen.getRawOutputStream());
             }
         }
     }
@@ -661,4 +688,18 @@ public class CMSSignedDataParser
 //        ASN1OctetStringParser octs = (ASN1OctetStringParser)sp.readObject();
 //        Streams.drain(octs.getOctetStream());
 //    }
+
+    static void writeEncapContentInfoToGenerator(SignedDataParser signedData, BERSequenceGenerator sigGen)
+        throws IOException
+    {
+        // encap content info
+        ContentInfoParser encapContentInfo = signedData.getEncapContentInfo();
+
+        BERSequenceGenerator eiGen = new BERSequenceGenerator(sigGen.getRawOutputStream());
+        eiGen.addObject(encapContentInfo.getContentType());
+
+        pipeEncapsulatedOctetString(encapContentInfo, eiGen.getRawOutputStream());
+
+        eiGen.close();
+    }
 }

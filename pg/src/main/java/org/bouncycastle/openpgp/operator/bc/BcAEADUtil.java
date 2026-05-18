@@ -25,6 +25,7 @@ import org.bouncycastle.crypto.params.HKDFParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPSessionKey;
+import org.bouncycastle.openpgp.operator.PGPAEADUtil;
 import org.bouncycastle.openpgp.operator.PGPDataDecryptor;
 import org.bouncycastle.openpgp.operator.PGPDigestCalculator;
 import org.bouncycastle.util.Arrays;
@@ -33,53 +34,11 @@ import org.bouncycastle.util.Pack;
 import org.bouncycastle.util.io.Streams;
 
 public class BcAEADUtil
+    extends PGPAEADUtil
 {
-    /**
-     * Generate a nonce by xor-ing the given iv with the chunk index.
-     *
-     * @param iv         initialization vector
-     * @param chunkIndex chunk index
-     * @return nonce
-     */
-    protected static byte[] getNonce(byte[] iv, long chunkIndex)
-    {
-        byte[] nonce = Arrays.clone(iv);
-
-        xorChunkId(nonce, chunkIndex);
-
-        return nonce;
-    }
-
-    /**
-     * XOR the byte array with the chunk index in-place.
-     *
-     * @param nonce      byte array
-     * @param chunkIndex chunk index
-     */
-    protected static void xorChunkId(byte[] nonce, long chunkIndex)
-    {
-        int index = nonce.length - 8;
-
-        nonce[index++] ^= (byte)(chunkIndex >> 56);
-        nonce[index++] ^= (byte)(chunkIndex >> 48);
-        nonce[index++] ^= (byte)(chunkIndex >> 40);
-        nonce[index++] ^= (byte)(chunkIndex >> 32);
-        nonce[index++] ^= (byte)(chunkIndex >> 24);
-        nonce[index++] ^= (byte)(chunkIndex >> 16);
-        nonce[index++] ^= (byte)(chunkIndex >> 8);
-        nonce[index] ^= (byte)(chunkIndex);
-    }
-
-    /**
-     * Calculate an actual chunk length from the encoded chunk size.
-     *
-     * @param chunkSize encoded chunk size
-     * @return decoded length
-     */
-    protected static long getChunkLength(int chunkSize)
-    {
-        return 1L << (chunkSize + 6);
-    }
+    final static String RecoverAEADEncryptedSessionDataErrorMessage = "Exception recovering session info";
+    private final static String ProcessAeadKeyDataErrorMessage = "Exception recovering AEAD protected private key material";
+    final static String GetEskAndTagErrorMessage = "cannot encrypt session info";
 
     /**
      * Derive a message key and IV from the given session key.
@@ -91,21 +50,25 @@ public class BcAEADUtil
      * @param salt       salt
      * @param hkdfInfo   HKDF info
      * @return message key and separate IV
-     * @throws PGPException
      */
     static byte[][] deriveMessageKeyAndIv(int aeadAlgo, int cipherAlgo, byte[] sessionKey, byte[] salt, byte[] hkdfInfo)
-        throws PGPException
+    {
+        int keyLen = SymmetricKeyUtils.getKeyLengthInOctets(cipherAlgo);
+        int ivLen = AEADUtils.getIVLength(aeadAlgo);
+        byte[] messageKeyAndIv = generateHKDFBytes(sessionKey, salt, hkdfInfo, keyLen + ivLen - 8);
+
+        return new byte[][]{Arrays.copyOfRange(messageKeyAndIv, 0, keyLen), Arrays.copyOfRange(messageKeyAndIv, keyLen, keyLen + ivLen)};
+    }
+
+    static byte[] generateHKDFBytes(byte[] sessionKey, byte[] salt, byte[] hkdfInfo, int len)
     {
         HKDFParameters hkdfParameters = new HKDFParameters(sessionKey, salt, hkdfInfo);
         HKDFBytesGenerator hkdfGen = new HKDFBytesGenerator(new SHA256Digest());
 
         hkdfGen.init(hkdfParameters);
-        int keyLen = SymmetricKeyUtils.getKeyLengthInOctets(cipherAlgo);
-        int ivLen = AEADUtils.getIVLength(aeadAlgo);
-        byte[] messageKeyAndIv = new byte[keyLen + ivLen - 8];
+        byte[] messageKeyAndIv = new byte[len];
         hkdfGen.generateBytes(messageKeyAndIv, 0, messageKeyAndIv.length);
-
-        return new byte[][]{Arrays.copyOfRange(messageKeyAndIv, 0, keyLen), Arrays.copyOfRange(messageKeyAndIv, keyLen, keyLen + ivLen)};
+        return messageKeyAndIv;
     }
 
     public static AEADBlockCipher createAEADCipher(int encAlgorithm, int aeadAlgorithm)
@@ -271,6 +234,45 @@ public class BcAEADUtil
         };
     }
 
+    static byte[] processAEADData(boolean forEncryption, int encAlgorithm, int aeadAlgorithm, byte[] key, byte[] iv, byte[] aad, byte[] msg, int off, int len, String errorMessage)
+        throws PGPException
+    {
+        AEADBlockCipher cipher = createAEADCipher(encAlgorithm, aeadAlgorithm);
+        try
+        {
+            return processAEADData(forEncryption, cipher, new KeyParameter(key), iv, aad, msg, off, len);
+        }
+        catch (InvalidCipherTextException e)
+        {
+            throw new PGPException(errorMessage, e);
+        }
+    }
+
+    static byte[] processAEADData(boolean forEncryption, AEADBlockCipher cipher, KeyParameter key, byte[] iv, byte[] aad, byte[] msg, int off, int msgLen)
+        throws InvalidCipherTextException
+    {
+        cipher.init(forEncryption, new AEADParameters(key, 128, iv, aad));
+        int dataLen = cipher.getOutputSize(msgLen);
+        byte[] data = new byte[dataLen];
+        dataLen = cipher.processBytes(msg, off, msgLen, data, 0);
+        cipher.doFinal(data, dataLen);
+        return data;
+    }
+
+    static byte[] processAeadKeyData(boolean forEncryption, int encAlgorithm, int aeadAlgorithm, byte[] s2kKey, byte[] iv,
+                                     int packetTag, int keyVersion, byte[] keyData, int keyOff, int keyLen, byte[] pubkeyData)
+        throws PGPException
+    {
+        byte[] key = generateHKDFBytes(s2kKey,
+            null,
+            new byte[]{
+                (byte)(0xC0 | packetTag), (byte)keyVersion, (byte)encAlgorithm, (byte)aeadAlgorithm
+            },
+            SymmetricKeyUtils.getKeyLengthInOctets(encAlgorithm));
+        byte[] aad = Arrays.prepend(pubkeyData, (byte)(0xC0 | packetTag));
+        return processAEADData(forEncryption, encAlgorithm, aeadAlgorithm, key, iv, aad, keyData, keyOff, keyLen, ProcessAeadKeyDataErrorMessage);
+    }
+
     protected static class PGPAeadInputStream
         extends InputStream
     {
@@ -418,20 +420,14 @@ public class BcAEADUtil
                 xorChunkId(adata, chunkIndex);
             }
 
-            byte[] decData = new byte[dataLen];
+            byte[] decData;
             try
             {
-                c.init(false, new AEADParameters(secretKey, 128, getNonce(iv, chunkIndex)));  // always full tag.
-
-                c.processAADBytes(adata, 0, adata.length);
-
-                int len = c.processBytes(buf, 0, dataLen + tagLen, decData, 0);
-
-                c.doFinal(decData, len);
+                decData = processAEADData(false, c, secretKey, getNonce(iv, chunkIndex), adata, buf, 0, dataLen + tagLen);
             }
             catch (InvalidCipherTextException e)
             {
-                throw new IOException("exception processing chunk " + chunkIndex + ": " + e.getMessage());
+                throw Exceptions.ioException("exception processing chunk " + chunkIndex + ": " + e.getMessage(), e);
             }
 
             totalBytes += decData.length;
@@ -445,9 +441,8 @@ public class BcAEADUtil
 
                 try
                 {
-                    c.init(false, new AEADParameters(secretKey, 128, getNonce(iv, chunkIndex)));  // always full tag.
+                    c.init(false, new AEADParameters(secretKey, 128, getNonce(iv, chunkIndex), adata));  // always full tag.
 
-                    c.processAADBytes(adata, 0, adata.length);
                     if (isV5StyleAEAD)
                     {
                         c.processAADBytes(Pack.longToBigEndian(totalBytes), 0, 8);
@@ -459,7 +454,7 @@ public class BcAEADUtil
                 }
                 catch (InvalidCipherTextException e)
                 {
-                    throw new IOException("exception processing final tag: " + e.getMessage());
+                    throw Exceptions.ioException("exception processing final tag: " + e.getMessage(), e);
                 }
             }
             else
@@ -621,8 +616,7 @@ public class BcAEADUtil
 
             try
             {
-                c.init(true, new AEADParameters(secretKey, 128, getNonce(iv, chunkIndex)));  // always full tag.
-                c.processAADBytes(adata, 0, adata.length);
+                c.init(true, new AEADParameters(secretKey, 128, getNonce(iv, chunkIndex), adata));  // always full tag.
 
                 int len = c.processBytes(data, 0, dataOff, data, 0);
                 out.write(data, 0, len);
@@ -632,7 +626,7 @@ public class BcAEADUtil
             }
             catch (InvalidCipherTextException e)
             {
-                throw new IOException("exception processing chunk " + chunkIndex + ": " + e.getMessage());
+                throw Exceptions.ioException("exception processing chunk " + chunkIndex + ": " + e.getMessage(), e);
             }
 
             totalBytes += dataOff;
@@ -651,8 +645,8 @@ public class BcAEADUtil
             byte[] adata = PGPAeadInputStream.getAdata(v5StyleAEAD, aaData, chunkIndex, totalBytes);
             try
             {
-                c.init(true, new AEADParameters(secretKey, 128, getNonce(iv, chunkIndex)));  // always full tag.
-                c.processAADBytes(adata, 0, adata.length);
+                c.init(true, new AEADParameters(secretKey, 128, getNonce(iv, chunkIndex), adata));  // always full tag.
+
                 if (v5StyleAEAD)
                 {
                     c.processAADBytes(Pack.longToBigEndian(totalBytes), 0, 8);

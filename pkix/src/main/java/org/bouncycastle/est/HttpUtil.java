@@ -1,6 +1,5 @@
 package org.bouncycastle.est;
 
-
 import java.io.StringWriter;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -173,9 +172,6 @@ class HttpUtil
     static class Headers
         extends HashMap<String, String[]>
     {
-        private static final String EMPTY = "";
-
-
         public Headers()
         {
             super();
@@ -198,7 +194,7 @@ class HttpUtil
             {
                 return j[0];
             }
-            return EMPTY;
+            return "";
         }
 
         public String[] getValues(String key)

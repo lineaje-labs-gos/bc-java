@@ -10,111 +10,121 @@ import org.bouncycastle.bcpg.attr.ImageAttribute;
  * reader for user attribute sub-packets
  */
 public class UserAttributeSubpacketInputStream
-    extends InputStream implements UserAttributeSubpacketTags
+    extends InputStream
+    implements UserAttributeSubpacketTags
 {
-    InputStream    in;
+    InputStream in;
+    private final int limit;
     
     public UserAttributeSubpacketInputStream(
-        InputStream    in)
+        InputStream in)
+    {
+        this(in, StreamUtil.findLimit(in));
+    }
+
+    public UserAttributeSubpacketInputStream(
+        InputStream in,
+        int limit)
     {
         this.in = in;
+        this.limit = limit;
     }
-    
+
     public int available()
         throws IOException
     {
         return in.available();
     }
-    
+
     public int read()
         throws IOException
     {
         return in.read();
     }
-    
+
     private void readFully(
-        byte[]    buf,
-        int       off,
-        int       len)
+        byte[] buf,
+        int off,
+        int len)
         throws IOException
     {
         if (len > 0)
         {
-            int    b = this.read();
-            
+            int b = this.read();
+
             if (b < 0)
             {
                 throw new EOFException();
             }
-            
+
             buf[off] = (byte)b;
             off++;
             len--;
         }
-        
+
         while (len > 0)
         {
-            int    l = in.read(buf, off, len);
-            
+            int l = in.read(buf, off, len);
+
             if (l < 0)
             {
                 throw new EOFException();
             }
-            
+
             off += l;
             len -= l;
         }
     }
-    
+
     public UserAttributeSubpacket readPacket()
         throws IOException
     {
-        int            l = this.read();
-        int            bodyLen = 0;
-        boolean        longLength = false;
-
-        if (l < 0)
+        boolean[] flags = new boolean[3];
+        int bodyLen = StreamUtil.readBodyLen(this, flags);
+        if (flags[StreamUtil.flag_eof])
         {
             return null;
         }
-
-        if (l < 192)
+        else if (flags[StreamUtil.flag_partial])
         {
-            bodyLen = l;
+            throw new MalformedPacketException("unrecognised length reading user attribute sub packet");
         }
-        else if (l <= 223)
+        if (bodyLen < 1)
         {
-            bodyLen = ((l - 192) << 8) + (in.read()) + 192;
+            throw new MalformedPacketException("Body length octet too small.");
         }
-        else if (l == 255)
+        if (bodyLen > limit)
         {
-            bodyLen = (in.read() << 24) | (in.read() << 16) |  (in.read() << 8)  | in.read();
-            longLength = true;
+            throw new MalformedPacketException("Body length octet (" + bodyLen + ") exceeds limitations (" + limit + ").");
         }
-        else
+        boolean longLength = flags[StreamUtil.flag_isLongLength];
+
+        int tag = in.read();
+
+        if (tag < 0)
         {
-            throw new IOException("unrecognised length reading user attribute sub packet");
+            throw new EOFException("unexpected EOF reading user attribute sub packet");
         }
 
-       int        tag = in.read();
+        byte[] data = new byte[bodyLen - 1];
 
-       if (tag < 0)
-       {
-           throw new EOFException("unexpected EOF reading user attribute sub packet");
-       }
-       
-       byte[]    data = new byte[bodyLen - 1];
+        this.readFully(data, 0, data.length);
 
-       this.readFully(data, 0, data.length);
-       
-       int       type = tag;
+        int type = tag;
 
-       switch (type)
-       {
-       case IMAGE_ATTRIBUTE:
-           return new ImageAttribute(longLength, data);
-       }
+        try
+        {
+            switch (type)
+            {
+            case IMAGE_ATTRIBUTE:
+                return new ImageAttribute(longLength, data);
+            }
+        }
+        catch (IllegalArgumentException e)
+        {
+            throw new MalformedPacketException("Malformed UserAttribute subpacket.", e);
+        }
 
-       return new UserAttributeSubpacket(type, longLength, data);
+        return new UserAttributeSubpacket(type, longLength, data);
     }
 }

@@ -1,8 +1,6 @@
 package org.bouncycastle.tls.crypto.impl.jcajce;
 
-import java.io.IOException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.security.interfaces.DSAPrivateKey;
 import java.security.interfaces.RSAPrivateKey;
 
@@ -19,16 +17,6 @@ import org.bouncycastle.tls.crypto.TlsSigner;
 public class JcaDefaultTlsCredentialedSigner
     extends DefaultTlsCredentialedSigner
 {
-    private static JcaTlsCertificate getEndEntity(JcaTlsCrypto crypto, Certificate certificate) throws IOException
-    {
-        if (certificate == null || certificate.isEmpty())
-        {
-            throw new IllegalArgumentException("No certificate");
-        }
-
-        return JcaTlsCertificate.convert(crypto, certificate.getCertificateAt(0));
-    }
-
     private static TlsSigner makeSigner(JcaTlsCrypto crypto, PrivateKey privateKey, Certificate certificate,
         SignatureAndHashAlgorithm signatureAndHashAlgorithm)
     {
@@ -50,17 +38,7 @@ public class JcaDefaultTlsCredentialedSigner
                 }
             }
 
-            PublicKey publicKey;
-            try
-            {
-                publicKey = getEndEntity(crypto, certificate).getPubKeyRSA();
-            }
-            catch (Exception e)
-            {
-                throw new RuntimeException(e);
-            }
-
-            signer = new JcaTlsRSASigner(crypto, privateKey, publicKey);
+            signer = new JcaTlsRSASigner(crypto, privateKey);
         }
         else if (privateKey instanceof DSAPrivateKey
             || "DSA".equalsIgnoreCase(algorithm))
@@ -72,6 +50,10 @@ public class JcaDefaultTlsCredentialedSigner
             if (signatureAndHashAlgorithm != null)
             {
                 int signatureScheme = SignatureScheme.from(signatureAndHashAlgorithm);
+                if (signatureScheme == SignatureScheme.sm2sig_sm3)
+                {
+                    return new JcaTlsSM2Signer(crypto, privateKey, signatureScheme);
+                }
                 if (SignatureScheme.isECDSA(signatureScheme))
                 {
                     return new JcaTlsECDSA13Signer(crypto, privateKey, signatureScheme);
@@ -87,6 +69,66 @@ public class JcaDefaultTlsCredentialedSigner
         else if ("Ed448".equalsIgnoreCase(algorithm))
         {
             signer = new JcaTlsEd448Signer(crypto, privateKey);
+        }
+        else if ("ML-DSA-44".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsMLDSASigner(crypto, privateKey, SignatureScheme.mldsa44);
+        }
+        else if ("ML-DSA-65".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsMLDSASigner(crypto, privateKey, SignatureScheme.mldsa65);
+        }
+        else if ("ML-DSA-87".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsMLDSASigner(crypto, privateKey, SignatureScheme.mldsa87);
+        }
+        else if ("SLH-DSA-SHA2-128S".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_sha2_128s);
+        }
+        else if ("SLH-DSA-SHA2-128F".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_sha2_128f);
+        }
+        else if ("SLH-DSA-SHA2-192S".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_sha2_192s);
+        }
+        else if ("SLH-DSA-SHA2-192F".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_sha2_192f);
+        }
+        else if ("SLH-DSA-SHA2-256S".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_sha2_256s);
+        }
+        else if ("SLH-DSA-SHA2-256F".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_sha2_256f);
+        }
+        else if ("SLH-DSA-SHAKE-128S".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_shake_128s);
+        }
+        else if ("SLH-DSA-SHAKE-128F".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_shake_128f);
+        }
+        else if ("SLH-DSA-SHAKE-192S".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_shake_192s);
+        }
+        else if ("SLH-DSA-SHAKE-192F".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_shake_192f);
+        }
+        else if ("SLH-DSA-SHAKE-256S".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_shake_256s);
+        }
+        else if ("SLH-DSA-SHAKE-256F".equalsIgnoreCase(algorithm))
+        {
+            signer = new JcaTlsSLHDSASigner(crypto, privateKey, SignatureScheme.DRAFT_slhdsa_shake_256f);
         }
         else
         {

@@ -1,12 +1,22 @@
 package org.bouncycastle.bcpg.sig;
 
+import org.bouncycastle.bcpg.KeyIdentifier;
 import org.bouncycastle.bcpg.SignatureSubpacket;
 import org.bouncycastle.bcpg.SignatureSubpacketTags;
+import org.bouncycastle.util.Arrays;
 
 /**
  * Represents revocation key OpenPGP signature sub packet.
+ * Note: This packet is deprecated. Applications MUST NOT generate such a packet.
+ *
+ * @see <a href="https://datatracker.ietf.org/doc/html/rfc4880#section-5.2.3.15">
+ * RFC4880 - Revocation Key</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9580.html#name-revocation-key">
+ * RFC9580 - Revocation Key</a>
+ * @deprecated since RFC9580
  */
-public class RevocationKey extends SignatureSubpacket
+public class RevocationKey
+    extends SignatureSubpacket
 {
     // 1 octet of class, 
     // 1 octet of public-key algorithm ID, 
@@ -43,8 +53,11 @@ public class RevocationKey extends SignatureSubpacket
 
     public byte[] getFingerprint()
     {
-        byte[] fingerprint = new byte[data.length - 2];
-        System.arraycopy(data, 2, fingerprint, 0, fingerprint.length);
-        return fingerprint;
+        return Arrays.copyOfRange(data, 2, data.length);
+    }
+
+    public KeyIdentifier getKeyIdentifier()
+    {
+        return new KeyIdentifier(getFingerprint());
     }
 }

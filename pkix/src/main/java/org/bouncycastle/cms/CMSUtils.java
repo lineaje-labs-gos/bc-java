@@ -22,7 +22,6 @@ import org.bouncycastle.asn1.ASN1SequenceParser;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.ASN1SetParser;
 import org.bouncycastle.asn1.ASN1TaggedObject;
-import org.bouncycastle.asn1.BEROctetString;
 import org.bouncycastle.asn1.BEROctetStringGenerator;
 import org.bouncycastle.asn1.BERSequenceGenerator;
 import org.bouncycastle.asn1.BERSet;
@@ -30,6 +29,7 @@ import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.DERTaggedObject;
 import org.bouncycastle.asn1.DLSet;
+import org.bouncycastle.asn1.bsi.BSIObjectIdentifiers;
 import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.cms.ContentInfo;
@@ -54,25 +54,22 @@ import org.bouncycastle.operator.GenericKey;
 import org.bouncycastle.operator.OutputAEADEncryptor;
 import org.bouncycastle.operator.OutputEncryptor;
 import org.bouncycastle.util.Store;
-import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.io.Streams;
 import org.bouncycastle.util.io.TeeInputStream;
 import org.bouncycastle.util.io.TeeOutputStream;
 
 class CMSUtils
 {
-    private static final Set<String> des = new HashSet<String>();
+    private static final Set desAlgs = new HashSet();
     private static final Set mqvAlgs = new HashSet();
     private static final Set ecAlgs = new HashSet();
     private static final Set gostAlgs = new HashSet();
 
     static
     {
-        des.add("DES");
-        des.add("DESEDE");
-        des.add(OIWObjectIdentifiers.desCBC.getId());
-        des.add(PKCSObjectIdentifiers.des_EDE3_CBC.getId());
-        des.add(PKCSObjectIdentifiers.id_alg_CMS3DESwrap.getId());
+        desAlgs.add(OIWObjectIdentifiers.desCBC);
+        desAlgs.add(PKCSObjectIdentifiers.des_EDE3_CBC);
+        desAlgs.add(PKCSObjectIdentifiers.id_alg_CMS3DESwrap);
 
         mqvAlgs.add(X9ObjectIdentifiers.mqvSinglePass_sha1kdf_scheme);
         mqvAlgs.add(SECObjectIdentifiers.mqvSinglePass_sha224kdf_scheme);
@@ -91,9 +88,29 @@ class CMSUtils
         ecAlgs.add(SECObjectIdentifiers.dhSinglePass_cofactorDH_sha512kdf_scheme);
         ecAlgs.add(SECObjectIdentifiers.dhSinglePass_stdDH_sha512kdf_scheme);
 
+        // RFC 8418 - HKDF-based ECDH (X25519/X448) for CMS EnvelopedData.
+        ecAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha256_scheme);
+        ecAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha384_scheme);
+        ecAlgs.add(PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha512_scheme);
+
+        // BSI TR-03111 ECKA-EG with X9.63 KDF. Structurally identical to
+        // dhSinglePass_stdDH_*kdf_scheme (ECDH + X9.63 KDF + RFC 5753
+        // ECC-CMS-SharedInfo per BSI TR-03109-3 / ICAO 9303-11); dispatch
+        // through the same EC code path so the RFC 5753 KDF material is
+        // generated consistently for both encode and decode (issue #790).
+        ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_SHA1);
+        ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_SHA224);
+        ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_SHA256);
+        ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_SHA384);
+        ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_SHA512);
+        ecAlgs.add(BSIObjectIdentifiers.ecka_eg_X963kdf_RIPEMD160);
+
         gostAlgs.add(CryptoProObjectIdentifiers.gostR3410_2001_CryptoPro_ESDH);
+        gostAlgs.add(CryptoProObjectIdentifiers.gostR3410_2001);
         gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_agreement_gost_3410_12_256);
         gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_agreement_gost_3410_12_512);
+        gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_gost_3410_12_256);
+        gostAlgs.add(RosstandartObjectIdentifiers.id_tc26_gost_3410_12_512);
     }
 
     static boolean isMQV(ASN1ObjectIdentifier algorithm)
@@ -113,14 +130,13 @@ class CMSUtils
 
     static boolean isRFC2631(ASN1ObjectIdentifier algorithm)
     {
-        return algorithm.equals(PKCSObjectIdentifiers.id_alg_ESDH) || algorithm.equals(PKCSObjectIdentifiers.id_alg_SSDH);
+        return PKCSObjectIdentifiers.id_alg_ESDH.equals(algorithm)
+            || PKCSObjectIdentifiers.id_alg_SSDH.equals(algorithm);
     }
 
-    static boolean isDES(String algorithmID)
+    static boolean isDES(ASN1ObjectIdentifier algorithm)
     {
-        String name = Strings.toUpperCase(algorithmID);
-
-        return des.contains(name);
+        return desAlgs.contains(algorithm);
     }
 
     static boolean isEquivalent(AlgorithmIdentifier algId1, AlgorithmIdentifier algId2)
@@ -422,22 +438,11 @@ class CMSUtils
             s1, s2);
     }
 
-    static EncryptedContentInfo getEncryptedContentInfo(CMSTypedData content, OutputEncryptor contentEncryptor, byte[] encryptedContent)
+    static EncryptedContentInfo getEncryptedContentInfo(CMSTypedData content, OutputEncryptor contentEncryptor,
+        ASN1OctetString encryptedContent)
     {
-        return getEncryptedContentInfo(
-            content.getContentType(),
-            contentEncryptor.getAlgorithmIdentifier(),
+        return new EncryptedContentInfo(content.getContentType(), contentEncryptor.getAlgorithmIdentifier(),
             encryptedContent);
-    }
-
-    static EncryptedContentInfo getEncryptedContentInfo(ASN1ObjectIdentifier encryptedContentType, AlgorithmIdentifier encAlgId, byte[] encryptedContent)
-    {
-        ASN1OctetString encContent = new BEROctetString(encryptedContent);
-
-        return new EncryptedContentInfo(
-            encryptedContentType,
-            encAlgId,
-            encContent);
     }
 
     static ASN1EncodableVector getRecipentInfos(GenericKey encKey, List recipientInfoGenerators)
@@ -460,11 +465,11 @@ class CMSUtils
     {
         if (berEncodeRecipientSet)
         {
-            authGen.getRawOutputStream().write(new BERSet(recipientInfos).getEncoded());
+            new BERSet(recipientInfos).encodeTo(authGen.getRawOutputStream());
         }
         else
         {
-            authGen.getRawOutputStream().write(new DERSet(recipientInfos).getEncoded());
+            new DERSet(recipientInfos).encodeTo(authGen.getRawOutputStream());
         }
     }
 
@@ -492,7 +497,7 @@ class CMSUtils
         ASN1Set authenticatedAttrSet = null;
         if (authAttrsGenerator != null)
         {
-            AttributeTable attrTable = authAttrsGenerator.getAttributes(Collections.EMPTY_MAP);
+            AttributeTable attrTable = authAttrsGenerator.getAttributes(getEmptyParameters());
 
             authenticatedAttrSet = new DERSet(attrTable.toASN1EncodableVector());
             encryptor.getAADStream().write(authenticatedAttrSet.getEncoded(ASN1Encoding.DER));
@@ -521,12 +526,12 @@ class CMSUtils
 
     static ASN1Set getAttrDLSet(CMSAttributeTableGenerator gen)
     {
-        return (gen != null) ? new DLSet(gen.getAttributes(Collections.EMPTY_MAP).toASN1EncodableVector()) : null;
+        return (gen != null) ? new DLSet(gen.getAttributes(getEmptyParameters()).toASN1EncodableVector()) : null;
     }
 
     static ASN1Set getAttrBERSet(CMSAttributeTableGenerator gen)
     {
-        return (gen != null) ? new BERSet(gen.getAttributes(Collections.EMPTY_MAP).toASN1EncodableVector()) : null;
+        return (gen != null) ? new BERSet(gen.getAttributes(getEmptyParameters()).toASN1EncodableVector()) : null;
     }
 
     static byte[] encodeObj(
@@ -539,5 +544,10 @@ class CMSUtils
         }
 
         return null;
+    }
+
+    static Map getEmptyParameters()
+    {
+        return Collections.EMPTY_MAP;
     }
 }

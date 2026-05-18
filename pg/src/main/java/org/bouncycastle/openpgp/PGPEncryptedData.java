@@ -7,7 +7,6 @@ import java.io.OutputStream;
 
 import org.bouncycastle.bcpg.AEADAlgorithmTags;
 import org.bouncycastle.bcpg.AEADEncDataPacket;
-import org.bouncycastle.bcpg.BCPGInputStream;
 import org.bouncycastle.bcpg.InputStreamPacket;
 import org.bouncycastle.bcpg.SymmetricEncIntegrityPacket;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
@@ -175,6 +174,11 @@ public abstract class PGPEncryptedData
         return (encData instanceof SymmetricEncIntegrityPacket);
     }
 
+    public InputStreamPacket getEncData()
+    {
+        return encData;
+    }
+
     /**
      * Checks whether the packet is protected using an AEAD algorithm.
      *
@@ -183,7 +187,18 @@ public abstract class PGPEncryptedData
      */
     public boolean isAEAD()
     {
-        return (encData instanceof AEADEncDataPacket);
+        if (encData instanceof AEADEncDataPacket)
+        {
+            return true;
+        }
+        if (encData instanceof SymmetricEncIntegrityPacket)
+        {
+            return ((SymmetricEncIntegrityPacket) encData).getVersion() == SymmetricEncIntegrityPacket.VERSION_2;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     /**
@@ -211,6 +226,12 @@ public abstract class PGPEncryptedData
         while (encStream.read() >= 0)
         {
             // do nothing
+        }
+
+        if (isAEAD())
+        {
+            // AEAD data needs no manual verification, as decryption detects errors automatically
+            return true;
         }
 
         //
@@ -254,10 +275,11 @@ public abstract class PGPEncryptedData
         throw new UnsupportedOperationException("not supported - override required");
     }
 
-    boolean processSymmetricEncIntegrityPacketDataStream(boolean withIntegrityPacket, PGPDataDecryptor dataDecryptor, BCPGInputStream encIn)
+    boolean processSymmetricEncIntegrityPacketDataStream(boolean withIntegrityPacket, PGPDataDecryptor dataDecryptor,
+        InputStream encIn)
         throws IOException
     {
-        encStream = new BCPGInputStream(dataDecryptor.getInputStream(encIn));
+        encStream = dataDecryptor.getInputStream(encIn);
 
         if (withIntegrityPacket)
         {

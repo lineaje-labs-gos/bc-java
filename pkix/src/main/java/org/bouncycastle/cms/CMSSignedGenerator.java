@@ -2,8 +2,8 @@ package org.bouncycastle.cms;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -56,32 +56,6 @@ public class CMSSignedGenerator
     public static final String  ENCRYPTION_ECGOST3410_2012_256 = RosstandartObjectIdentifiers.id_tc26_gost_3410_12_256.getId();
     public static final String  ENCRYPTION_ECGOST3410_2012_512 = RosstandartObjectIdentifiers.id_tc26_gost_3410_12_512.getId();
 
-    private static final String  ENCRYPTION_ECDSA_WITH_SHA1 = ENCRYPTION_ECDSA;
-    private static final String  ENCRYPTION_ECDSA_WITH_SHA224 = X9ObjectIdentifiers.ecdsa_with_SHA224.getId();
-    private static final String  ENCRYPTION_ECDSA_WITH_SHA256 = X9ObjectIdentifiers.ecdsa_with_SHA256.getId();
-    private static final String  ENCRYPTION_ECDSA_WITH_SHA384 = X9ObjectIdentifiers.ecdsa_with_SHA384.getId();
-    private static final String  ENCRYPTION_ECDSA_WITH_SHA512 = X9ObjectIdentifiers.ecdsa_with_SHA512.getId();
-
-    private static final Set NO_PARAMS = new HashSet();
-    private static final Map EC_ALGORITHMS = new HashMap();
-
-    static
-    {
-        NO_PARAMS.add(ENCRYPTION_DSA);
-        NO_PARAMS.add(ENCRYPTION_ECDSA);
-//        NO_PARAMS.add(ENCRYPTION_ECDSA_WITH_SHA1);
-        NO_PARAMS.add(ENCRYPTION_ECDSA_WITH_SHA224);
-        NO_PARAMS.add(ENCRYPTION_ECDSA_WITH_SHA256);
-        NO_PARAMS.add(ENCRYPTION_ECDSA_WITH_SHA384);
-        NO_PARAMS.add(ENCRYPTION_ECDSA_WITH_SHA512);
-
-        EC_ALGORITHMS.put(DIGEST_SHA1, ENCRYPTION_ECDSA_WITH_SHA1);
-        EC_ALGORITHMS.put(DIGEST_SHA224, ENCRYPTION_ECDSA_WITH_SHA224);
-        EC_ALGORITHMS.put(DIGEST_SHA256, ENCRYPTION_ECDSA_WITH_SHA256);
-        EC_ALGORITHMS.put(DIGEST_SHA384, ENCRYPTION_ECDSA_WITH_SHA384);
-        EC_ALGORITHMS.put(DIGEST_SHA512, ENCRYPTION_ECDSA_WITH_SHA512);
-    }
-
     protected List certs = new ArrayList();
     protected List crls = new ArrayList();
     protected List _signers = new ArrayList();
@@ -89,6 +63,8 @@ public class CMSSignedGenerator
     protected Map digests = new HashMap();
 
     protected DigestAlgorithmIdentifierFinder digestAlgIdFinder;
+
+    protected Set<AlgorithmIdentifier> extraDigestAlgorithms = new LinkedHashSet<AlgorithmIdentifier>();
 
     /**
      * base constructor
@@ -250,5 +226,14 @@ public class CMSSignedGenerator
     public Map getGeneratedDigests()
     {
         return new HashMap(digests);
+    }
+
+    /**
+     * Add extra digest algorithm identifiers to the digest algorithm set in resulting SignedData object.
+     * @param digestAlgorithmIDs a set of extra digest algorithms
+     * */
+    public void addDigestAlgorithms(Set<AlgorithmIdentifier> digestAlgorithmIDs)
+    {
+        extraDigestAlgorithms.addAll(digestAlgorithmIDs);
     }
 }

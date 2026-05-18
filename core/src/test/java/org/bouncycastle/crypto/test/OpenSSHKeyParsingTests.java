@@ -294,7 +294,6 @@ public class OpenSSHKeyParsingTests
             doECSigTest(new ECPublicKeyParameters(q, privKey.getParameters()), privKey);
         }
 
-
         for (int i = 0; i != pairs.length; i++)
         {
             String[] pair = pairs[i];
@@ -333,6 +332,14 @@ public class OpenSSHKeyParsingTests
             isTrue("ECDSA test post encoded / decode", signer.verifySignature(originalMessage, rs[0], rs[1]));
         }
 
+    }
+
+    private void testFido2Keys()
+    {
+        // P-256 ECDSA Key
+        byte[] decode = Base64.decode("AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlzdHAyNTYAAABBBPnfX2RzzEvD5CEX/0G3LLXrDWjrir9jZ2omSoxNyNT44cSiOP2v/WodnYpQdJsLIZn5bGNI0UxzxTuFzdizrWkAAAAEc3NoOg==");
+
+        CipherParameters xpubSpec = OpenSSHPublicKeyUtil.parsePublicKey(decode);
     }
 
     private void doECSigTest(CipherParameters pubSpec, CipherParameters privSpec)
@@ -470,6 +477,56 @@ public class OpenSSHKeyParsingTests
         testRSA();
         testED25519();
         testFailures();
+        testFido2Keys();
+        testECDSAEncodeOpenSSHFormat();
+    }
+
+    /**
+     * github #2240 - ensure encodePrivateKey for ECDSA emits the openssh-key-v1
+     * envelope (not the raw RFC 5915 ECPrivateKey SEQUENCE) so the output is
+     * compatible with OpenSSH and JSCH.
+     */
+    public void testECDSAEncodeOpenSSHFormat()
+        throws Exception
+    {
+        org.bouncycastle.crypto.generators.ECKeyPairGenerator kpg =
+            new org.bouncycastle.crypto.generators.ECKeyPairGenerator();
+        org.bouncycastle.asn1.x9.X9ECParameters x9 =
+            org.bouncycastle.asn1.nist.NISTNamedCurves.getByName("P-256");
+        org.bouncycastle.crypto.params.ECDomainParameters domain =
+            new org.bouncycastle.crypto.params.ECNamedDomainParameters(
+                org.bouncycastle.asn1.sec.SECObjectIdentifiers.secp256r1, x9);
+        kpg.init(new org.bouncycastle.crypto.params.ECKeyGenerationParameters(domain, secureRandom));
+        org.bouncycastle.crypto.AsymmetricCipherKeyPair pair = kpg.generateKeyPair();
+        ECPrivateKeyParameters privateKey = (ECPrivateKeyParameters)pair.getPrivate();
+
+        byte[] encoded = OpenSSHPrivateKeyUtil.encodePrivateKey(privateKey);
+
+        byte[] expectedMagic = org.bouncycastle.util.Strings.toByteArray("openssh-key-v1\0");
+        if (encoded.length < expectedMagic.length)
+        {
+            fail("ECDSA OpenSSH-encoded key too short");
+        }
+        for (int i = 0; i < expectedMagic.length; i++)
+        {
+            if (encoded[i] != expectedMagic[i])
+            {
+                fail("ECDSA OpenSSH-encoded key missing openssh-key-v1 magic at byte " + i);
+            }
+        }
+
+        // Round-trip via the parser; recovered scalar must match.
+        ECPrivateKeyParameters recovered = (ECPrivateKeyParameters)
+            OpenSSHPrivateKeyUtil.parsePrivateKeyBlob(encoded);
+        if (!privateKey.getD().equals(recovered.getD()))
+        {
+            fail("ECDSA round-trip lost the private scalar");
+        }
+
+        // Also confirm a sign / verify works end-to-end.
+        ECPoint q = privateKey.getParameters().getG().multiply(privateKey.getD()).normalize();
+        doECSigTest(new org.bouncycastle.crypto.params.ECPublicKeyParameters(q, privateKey.getParameters()),
+            privateKey);
     }
 
     public void testRSA()

@@ -24,6 +24,7 @@ import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SHA384Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.engines.CamelliaEngine;
 import org.bouncycastle.crypto.engines.DESEngine;
 import org.bouncycastle.crypto.engines.DESedeEngine;
 import org.bouncycastle.crypto.engines.RC2Engine;
@@ -99,12 +100,13 @@ class EnvelopedDataHelper
         MAC_ALG_NAMES.put(CMSAlgorithm.AES256_CBC, "AESMac");
         MAC_ALG_NAMES.put(CMSAlgorithm.RC2_CBC, "RC2Mac");
 
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes128_GCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes192_GCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes256_GCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes128_CCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes192_CCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes256_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES128_GCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES192_GCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES256_GCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES128_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES192_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES256_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.ChaCha20Poly1305);
     }
 
     EnvelopedDataHelper()
@@ -125,6 +127,12 @@ class EnvelopedDataHelper
             || NISTObjectIdentifiers.id_aes256_CBC.equals(algorithm))
         {
             return new RFC3211WrapEngine(AESEngine.newInstance());
+        }
+        else if (CMSAlgorithm.CAMELLIA128_CBC.equals(algorithm)
+            || CMSAlgorithm.CAMELLIA192_CBC.equals(algorithm)
+            || CMSAlgorithm.CAMELLIA256_CBC.equals(algorithm))
+        {
+            return new RFC3211WrapEngine(new CamelliaEngine());
         }
         else if (PKCSObjectIdentifiers.des_EDE3_CBC.equals(algorithm))
         {

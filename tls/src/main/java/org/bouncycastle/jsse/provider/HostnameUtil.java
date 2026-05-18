@@ -20,6 +20,7 @@ import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.jsse.BCSNIHostName;
 import org.bouncycastle.util.IPAddress;
+import org.bouncycastle.util.Properties;
 
 class HostnameUtil
 {
@@ -30,39 +31,52 @@ class HostnameUtil
             throw new CertificateException("No hostname specified for HTTPS endpoint ID check");
         }
 
-        if (IPAddress.isValid(hostname))
+        boolean hostnameIsIPv4 = IPAddress.isValidIPv4(hostname);
+        boolean hostnameIsIPv6 = !hostnameIsIPv4 && IPAddress.isValidIPv6(hostname);
+
+        if (hostnameIsIPv4 || hostnameIsIPv6)
         {
             Collection<List<?>> subjectAltNames = certificate.getSubjectAlternativeNames();
             if (null != subjectAltNames)
             {
+                InetAddress hostnameInetAddress = null;
+
                 for (List<?> subjectAltName : subjectAltNames)
                 {
-                    int type = ((Integer)subjectAltName.get(0)).intValue();
-                    if (GeneralName.iPAddress != type)
+                    if (!isAltNameType(subjectAltName, GeneralName.iPAddress))
                     {
                         continue;
                     }
 
-                    String ipAddress = (String)subjectAltName.get(1);
+                    String ipAddress = getAltNameValue(subjectAltName);
+                    if (ipAddress == null)
+                    {
+                        continue;
+                    }
+
                     if (hostname.equalsIgnoreCase(ipAddress))
                     {
                         return;
                     }
 
-                    try
+                    // In case of IPv6 addresses, convert to InetAddress to handle abbreviated forms correctly
+                    if (hostnameIsIPv6 && IPAddress.isValidIPv6(ipAddress))
                     {
-                        if (InetAddress.getByName(hostname).equals(InetAddress.getByName(ipAddress)))
+                        try
                         {
-                            return;
+                            if (hostnameInetAddress == null)
+                            {
+                                hostnameInetAddress = InetAddress.getByName(hostname); 
+                            }
+                            if (hostnameInetAddress.equals(InetAddress.getByName(ipAddress)))
+                            {
+                                return;
+                            }
                         }
-                    }
-                    catch (UnknownHostException e)
-                    {
-                        // Ignore
-                    }
-                    catch (SecurityException e)
-                    {
-                        // Ignore
+                        catch (UnknownHostException e)
+                        {
+                            // Ignore
+                        }
                     }
                 }
             }
@@ -76,15 +90,19 @@ class HostnameUtil
                 boolean foundAnyDNSNames = false;
                 for (List<?> subjectAltName : subjectAltNames)
                 {
-                    int type = ((Integer)subjectAltName.get(0)).intValue();
-                    if (GeneralName.dNSName != type)
+                    if (!isAltNameType(subjectAltName, GeneralName.dNSName))
                     {
                         continue;
                     }
 
                     foundAnyDNSNames = true;
 
-                    String dnsName = (String)subjectAltName.get(1);
+                    String dnsName = getAltNameValue(subjectAltName);
+                    if (dnsName == null)
+                    {
+                        continue;
+                    }
+
                     if (matchesDNSName(hostname, dnsName, allWildcards))
                     {
                         return;
@@ -98,11 +116,22 @@ class HostnameUtil
                 }
             }
 
-            ASN1Primitive commonName = findMostSpecificCN(certificate.getSubjectX500Principal());
-            if (commonName instanceof ASN1String
-                && matchesDNSName(hostname, ((ASN1String)commonName).getString(), allWildcards))
+            // RFC 9525 sec. 6.3 deprecates CN as a TLS server identifier; the
+            // CAB Forum Baseline Requirements forbid putting hostnames in CN
+            // for publicly-trusted server certs. The fallback below is also
+            // a Name-Constraints bypass surface — see Properties.JSSE_HOSTNAME_CHECK_CN_FALLBACK
+            // javadoc for the full scenario — so it is gated behind that
+            // property, default OFF. Set the property to "true" (the current default) to restore the
+            // pre-fix SunJSSE-compatible behaviour for legacy certs that only
+            // identify the server via CN.
+            if (Properties.isOverrideSet(Properties.JSSE_HOSTNAME_CHECK_CN_FALLBACK, true))
             {
-                return;
+                ASN1Primitive commonName = findMostSpecificCN(certificate.getSubjectX500Principal());
+                if (commonName instanceof ASN1String
+                    && matchesDNSName(hostname, ((ASN1String)commonName).getString(), allWildcards))
+                {
+                    return;
+                }
             }
 
             throw new CertificateException("No name found matching " + hostname);
@@ -134,6 +163,19 @@ class HostnameUtil
         return null;
     }
 
+    private static String getAltNameValue(List<?> subjectAltName)
+    {
+        if (subjectAltName != null && subjectAltName.size() >= 2)
+        {
+            Object objValue = subjectAltName.get(1);
+            if (objValue instanceof String)
+            {
+                return (String)objValue;
+            }
+        }
+        return null;
+    }
+
     private static String getLabel(String s, int begin)
     {
         int end = s.indexOf('.', begin);
@@ -142,6 +184,19 @@ class HostnameUtil
             end = s.length();
         }
         return s.substring(begin, end);
+    }
+
+    private static boolean isAltNameType(List<?> subjectAltName, int type)
+    {
+        if (subjectAltName != null && subjectAltName.size() >= 1)
+        {
+            Object objValue = subjectAltName.get(0);
+            if (objValue instanceof Integer)
+            {
+                return ((Integer)objValue).intValue() == type;
+            }
+        }
+        return false;
     }
 
     private static boolean isValidDomainName(String name)

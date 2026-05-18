@@ -100,7 +100,7 @@ public class CipherStreamTest
     private static final byte[] GRAIN_128 = Hex.decode("0123456789abcdef123456789abcdef0");
     private static final byte[] GRAIN_128_IV = Hex.decode("0123456789abcdef12345678");
     private static final byte[] GRAIN_128_IN = new byte[16];
-    private static final byte[] GRAIN_128_OUT = Hex.decode("afb5babfa8de896b4b9c6acaf7c4fbfd");
+    private static final byte[] GRAIN_128_OUT = Hex.decode("ba399daf90df8eba103d9ea83c805904");
 
     public CipherStreamTest()
     {
@@ -291,7 +291,8 @@ public class CipherStreamTest
                     (byte)137, (byte)138, (byte)140, (byte)143 };
 
             byte[] keyBytes;
-            if (name.equals("HC256") || name.equals("XSalsa20") || name.equals("ChaCha7539") || name.equals("ChaCha20"))
+            if (name.equals("HC256") || name.equals("XSalsa20") || name.equals("ChaCha7539") || name.equals("ChaCha20")
+                || name.equals("XChaCha20"))
             {
                 keyBytes = key256;
             }
@@ -415,6 +416,8 @@ public class CipherStreamTest
         runTest("ChaCha20");
         testException("ChaCha20");
         testAlgorithm("ChaCha20", CHA7539K, CHA7539IV, CHA7539IN, CHA7539OUT);
+        runTest("XChaCha20");
+        testException("XChaCha20");
         runTest("HC128");
         testException("HC128");
         testAlgorithm("HC128", HCK128A, HC128IV, HCIN, HC128A);

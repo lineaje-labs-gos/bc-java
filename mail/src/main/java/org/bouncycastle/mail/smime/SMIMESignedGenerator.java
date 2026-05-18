@@ -6,7 +6,6 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -38,6 +37,7 @@ import org.bouncycastle.cms.SignerInfoGenerator;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.mail.smime.util.CRLFOutputStream;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Store;
 
 /**
@@ -253,7 +253,7 @@ public class SMIMESignedGenerator
     }
 
     private void addHashHeader(
-        StringBuffer header,
+        StringBuilder header,
         List signers)
     {
         int count = 0;
@@ -343,7 +343,7 @@ public class SMIMESignedGenerator
             //
             // build the multipart header
             //
-            StringBuffer header = new StringBuffer(
+            StringBuilder header = new StringBuilder(
                 "signed; protocol=\"application/pkcs7-signature\"");
 
             List allSigners = new ArrayList(_signers);
@@ -580,11 +580,11 @@ public class SMIMESignedGenerator
             }
             catch (MessagingException e)
             {
-                throw new IOException(e.toString());
+                throw Exceptions.ioException(e.toString(), e);
             }
             catch (CMSException e)
             {
-                throw new IOException(e.toString());
+                throw Exceptions.ioException(e.toString(), e);
             }
         }
     }

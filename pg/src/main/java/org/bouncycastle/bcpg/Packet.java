@@ -52,12 +52,26 @@ public class Packet
      * Tags 40 to 59 are reserved for unassigned, non-critical packets.
      * Tags 60 to 63 are non-critical private or experimental packets.
      *
-     * @see <a href="https://www.ietf.org/archive/id/draft-ietf-openpgp-crypto-refresh-09.html#name-packet-tags">
-     *     Packet Tags</a>
+     * @see <a href="https://www.rfc-editor.org/rfc/rfc9580.html#name-packet-tags">
+     *     OpenPGP - Packet Tags</a>
      * @return true if the packet is critical, false otherwise.
      */
     public boolean isCritical()
     {
         return getPacketTag() <= 39;
+    }
+
+    static int sanitizeLength(int len, int max, String variableName)
+            throws MalformedPacketException
+    {
+        if (len < 0)
+        {
+            throw new MalformedPacketException(variableName + " cannot be negative.");
+        }
+        if (len > max)
+        {
+            throw new MalformedPacketException(variableName + " (" + len + ") exceeds limit (" + max + ").");
+        }
+        return len;
     }
 }

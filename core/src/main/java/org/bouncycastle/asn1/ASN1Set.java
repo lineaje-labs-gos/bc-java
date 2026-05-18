@@ -6,6 +6,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 
 /**
  * ASN.1 <code>SET</code> and <code>SET OF</code> constructs.
@@ -136,7 +137,7 @@ public abstract class ASN1Set
             }
             catch (IOException e)
             {
-                throw new IllegalArgumentException("failed to construct set from byte[]: " + e.getMessage());
+                throw Exceptions.illegalArgumentException("failed to construct set from byte[]", e);
             }
         }
 
@@ -154,15 +155,20 @@ public abstract class ASN1Set
      * be using this method.
      *
      * @param taggedObject the tagged object.
-     * @param explicit true if the object is meant to be explicitly tagged
+     * @param declaredExplicit true if the object is meant to be explicitly tagged
      *          false otherwise.
      * @exception IllegalArgumentException if the tagged object cannot
      *          be converted.
      * @return an ASN1Set instance.
      */
-    public static ASN1Set getInstance(ASN1TaggedObject taggedObject, boolean explicit)
+    public static ASN1Set getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
     {
-        return (ASN1Set)TYPE.getContextInstance(taggedObject, explicit);
+        return (ASN1Set)TYPE.getContextTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1Set getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1Set)TYPE.getTagged(taggedObject, declaredExplicit);
     }
 
     protected final ASN1Encodable[] elements;
@@ -423,7 +429,7 @@ public abstract class ASN1Set
             return "[]";
         }
 
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         sb.append('[');
         for (int i = 0;;)
         {

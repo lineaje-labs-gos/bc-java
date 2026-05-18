@@ -29,6 +29,7 @@ import org.bouncycastle.bcpg.PacketTags;
 import org.bouncycastle.bcpg.PublicKeyAlgorithmTags;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Integers;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.encoders.Base64;
@@ -525,7 +526,7 @@ public class PGPUtil
             //
             // nothing but new lines, little else, assume regular armoring
             //
-            if (count < 4)
+            if (index < 4)
             {
                 return new ArmoredInputStream(in);
             }
@@ -553,7 +554,7 @@ public class PGPUtil
             }
             catch (DecoderException e)
             {
-                throw new IOException(e.getMessage());
+                throw Exceptions.ioException(e.getMessage(), e);
             }
         }
     }

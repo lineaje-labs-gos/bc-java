@@ -20,9 +20,17 @@ import org.bouncycastle.operator.OutputCompressor;
  *      OutputStream cOut = gen.open(outputStream, new ZlibCompressor());
  *      
  *      cOut.write(data);
- *      
+ *
  *      cOut.close();
  * </pre>
+ * <p>
+ * <b>Stream handling note:</b>
+ * <ul>
+ *   <li>The returned OutputStream must be closed to finalize the CMS structure.</li>
+ *   <li>Closing the returned stream <b>does not close</b> the underlying OutputStream
+ *       passed to {@code open()}.</li>
+ *   <li>Callers are responsible for closing the underlying OutputStream separately.</li>
+ * </ul>
  */
 public class CMSCompressedDataStreamGenerator
 {
@@ -79,34 +87,23 @@ public class CMSCompressedDataStreamGenerator
         OutputCompressor compressor)
         throws IOException
     {
+        // ContentInfo
         BERSequenceGenerator sGen = new BERSequenceGenerator(out);
-
         sGen.addObject(CMSObjectIdentifiers.compressedData);
 
-        //
-        // Compressed Data
-        //
+        // CompressedData
         BERSequenceGenerator cGen = new BERSequenceGenerator(sGen.getRawOutputStream(), 0, true);
-
-        cGen.addObject(new ASN1Integer(0));
-
-        //
-        // AlgorithmIdentifier
-        //
+        cGen.addObject(ASN1Integer.ZERO);
         cGen.addObject(compressor.getAlgorithmIdentifier());
 
-        //
-        // Encapsulated ContentInfo
-        //
-        BERSequenceGenerator eiGen = new BERSequenceGenerator(cGen.getRawOutputStream());
+        // EncapsulatedContentInfo
+        BERSequenceGenerator eciGen = new BERSequenceGenerator(cGen.getRawOutputStream());
+        eciGen.addObject(contentOID);
 
-        eiGen.addObject(contentOID);
+        // eContent [0] EXPLICIT OCTET STRING OPTIONAL
+        OutputStream ecStream = CMSUtils.createBEROctetOutputStream(eciGen.getRawOutputStream(), 0, true, _bufferSize);
 
-        OutputStream octetStream = CMSUtils.createBEROctetOutputStream(
-            eiGen.getRawOutputStream(), 0, true, _bufferSize);
-
-        return new CmsCompressedOutputStream(
-            compressor.getOutputStream(octetStream), sGen, cGen, eiGen);
+        return new CmsCompressedOutputStream(compressor.getOutputStream(ecStream), sGen, cGen, eciGen);
     }
 
     private static class CmsCompressedOutputStream

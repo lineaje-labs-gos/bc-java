@@ -15,12 +15,23 @@ import org.bouncycastle.pkix.util.filter.TrustedInput;
 import org.bouncycastle.pkix.util.filter.UntrustedInput;
 import org.bouncycastle.pkix.util.filter.UntrustedUrlInput;
 
-public class LocalizedMessage 
+public class LocalizedMessage
 {
+
+    /**
+     * Resource-bundle control that disables Java's "fall back to the JVM default
+     * locale" step in the candidate-locale chain. Without it, a caller who
+     * explicitly requests {@link Locale#ENGLISH} on a JVM whose default locale
+     * is e.g. German would receive the {@code _de} bundle when no {@code _en}
+     * file is shipped (see github #2249). With this control the lookup falls
+     * through directly to the base bundle instead.
+     */
+    private static final ResourceBundle.Control NO_FALLBACK_CONTROL =
+        ResourceBundle.Control.getNoFallbackControl(ResourceBundle.Control.FORMAT_DEFAULT);
 
     protected final String id;
     protected final String resource;
-    
+
     // ISO-8859-1 is the default encoding
     public static final String DEFAULT_ENCODING = "ISO-8859-1";
     protected String encoding = DEFAULT_ENCODING;
@@ -39,7 +50,7 @@ public class LocalizedMessage
      * @param id the id of the corresponding bundle in the resource file
      * @throws NullPointerException if <code>resource</code> or <code>id</code> is <code>null</code>
      */
-    public LocalizedMessage(String resource,String id) throws NullPointerException
+    public LocalizedMessage(String resource, String id) throws NullPointerException
     {
         if (resource == null || id == null)
         {
@@ -59,7 +70,7 @@ public class LocalizedMessage
      * @throws NullPointerException if <code>resource</code> or <code>id</code> is <code>null</code>
      * @throws UnsupportedEncodingException if the encoding is not supported
      */
-    public LocalizedMessage(String resource,String id, String encoding) throws NullPointerException, UnsupportedEncodingException
+    public LocalizedMessage(String resource, String id, String encoding) throws NullPointerException, UnsupportedEncodingException
     {
         if (resource == null || id == null)
         {
@@ -126,10 +137,10 @@ public class LocalizedMessage
      * @param key second part of the entry id
      * @param loc the used {@link Locale}
      * @param timezone the used {@link TimeZone}
-     * @return a Strng containing the localized message
+     * @return a String containing the localized message
      * @throws MissingEntryException if the resource file is not available or the entry does not exist.
      */
-    public String getEntry(String key,Locale loc, TimeZone timezone) throws MissingEntryException
+    public String getEntry(String key, Locale loc, TimeZone timezone) throws MissingEntryException
     {
         String entry = id;
         if (key != null)
@@ -142,11 +153,12 @@ public class LocalizedMessage
             ResourceBundle bundle;
             if (loader == null)
             {
-                bundle = ResourceBundle.getBundle(resource,loc);
+                bundle = ResourceBundle.getBundle(resource, loc,
+                    LocalizedMessage.class.getClassLoader(), NO_FALLBACK_CONTROL);
             }
             else
             {
-                bundle = ResourceBundle.getBundle(resource, loc, loader);
+                bundle = ResourceBundle.getBundle(resource, loc, loader, NO_FALLBACK_CONTROL);
             }
             String result = bundle.getString(entry);
             if (!encoding.equals(DEFAULT_ENCODING))
@@ -204,7 +216,7 @@ public class LocalizedMessage
     {
         if (extraArgs != null)
         {
-            StringBuffer sb = new StringBuffer(msg);
+            StringBuilder sb = new StringBuilder(msg);
             Object[] filteredArgs = extraArgs.getFilteredArgs(locale);
             for (int i = 0; i < filteredArgs.length; i++)
             {
@@ -460,7 +472,7 @@ public class LocalizedMessage
     
     public String toString()
     {
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         sb.append("Resource: \"").append(resource);
         sb.append("\" Id: \"").append(id).append("\"");
         sb.append(" Arguments: ").append(arguments.getArguments().length).append(" normal");

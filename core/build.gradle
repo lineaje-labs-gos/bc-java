@@ -8,8 +8,48 @@ application {
     mainClass.set("org.bouncycastle.crypto.fpe.SP80038GMicroBenchmark")
 }
 
+jar.archiveBaseName = "bccore-$vmrange"
 
 test {
     forkEvery = 1;
     maxParallelForks = 8;
+    jvmArgs = ['-Dtest.java.version.prefix=any']
+}
+
+compileJava {
+    options.release = 8
+}
+
+task sourcesJar(type: Jar) {
+    archiveBaseName="bccore"
+    archiveAppendix="${vmrange}"
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+    exclude("**/*.so")
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    archiveBaseName="bccore"
+    archiveAppendix="${vmrange}"
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives jar
+    archives javadocJar
+    archives sourcesJar
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'org.bouncycastle'
+            artifactId = "bccore-$vmrange"
+            from components.java
+
+            artifact(javadocJar)
+            artifact(sourcesJar)
+        }
+    }
 }

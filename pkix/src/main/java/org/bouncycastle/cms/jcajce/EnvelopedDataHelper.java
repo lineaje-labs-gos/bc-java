@@ -41,7 +41,7 @@ import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
-import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
+import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PBKDF2Params;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.RC2CBCParameter;
@@ -90,6 +90,7 @@ public class EnvelopedDataHelper
         BASE_CIPHER_NAMES.put(CMSAlgorithm.SEED_CBC, "SEED");
         BASE_CIPHER_NAMES.put(PKCSObjectIdentifiers.rc4, "RC4");
         BASE_CIPHER_NAMES.put(CryptoProObjectIdentifiers.gostR28147_gcfb, "GOST28147");
+        BASE_CIPHER_NAMES.put(GMObjectIdentifiers.sms4_cbc, "SM4");
 
         CIPHER_ALG_NAMES.put(CMSAlgorithm.DES_CBC,  "DES/CBC/PKCS5Padding");
         CIPHER_ALG_NAMES.put(CMSAlgorithm.RC2_CBC,  "RC2/CBC/PKCS5Padding");
@@ -104,12 +105,14 @@ public class EnvelopedDataHelper
         CIPHER_ALG_NAMES.put(CMSAlgorithm.CAMELLIA256_CBC, "Camellia/CBC/PKCS5Padding");
         CIPHER_ALG_NAMES.put(CMSAlgorithm.SEED_CBC, "SEED/CBC/PKCS5Padding");
         CIPHER_ALG_NAMES.put(PKCSObjectIdentifiers.rc4, "RC4");
+        CIPHER_ALG_NAMES.put(GMObjectIdentifiers.sms4_cbc, "SM4/CBC/PKCS5Padding");
 
         MAC_ALG_NAMES.put(CMSAlgorithm.DES_EDE3_CBC,  "DESEDEMac");
         MAC_ALG_NAMES.put(CMSAlgorithm.AES128_CBC,  "AESMac");
         MAC_ALG_NAMES.put(CMSAlgorithm.AES192_CBC,  "AESMac");
         MAC_ALG_NAMES.put(CMSAlgorithm.AES256_CBC,  "AESMac");
         MAC_ALG_NAMES.put(CMSAlgorithm.RC2_CBC,  "RC2Mac");
+        MAC_ALG_NAMES.put(CMSAlgorithm.ChaCha20Poly1305, "ChaCha20Poly1305Mac");
 
         PBKDF2_ALG_NAMES.put(PasswordRecipient.PRF.HMacSHA1.getAlgorithmID(), "PBKDF2WITHHMACSHA1");
         PBKDF2_ALG_NAMES.put(PasswordRecipient.PRF.HMacSHA224.getAlgorithmID(), "PBKDF2WITHHMACSHA224");
@@ -117,12 +120,13 @@ public class EnvelopedDataHelper
         PBKDF2_ALG_NAMES.put(PasswordRecipient.PRF.HMacSHA384.getAlgorithmID(), "PBKDF2WITHHMACSHA384");
         PBKDF2_ALG_NAMES.put(PasswordRecipient.PRF.HMacSHA512.getAlgorithmID(), "PBKDF2WITHHMACSHA512");
 
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes128_GCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes192_GCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes256_GCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes128_CCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes192_CCM);
-        authEnvelopedAlgorithms.add(NISTObjectIdentifiers.id_aes256_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES128_GCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES192_GCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES256_GCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES128_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES192_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.AES256_CCM);
+        authEnvelopedAlgorithms.add(CMSAlgorithm.ChaCha20Poly1305);
     }
 
     private static final short[] rc2Table = {
@@ -485,7 +489,6 @@ public class EnvelopedDataHelper
             {
                 Mac mac = createMac(macAlgId.getAlgorithm());
                 ASN1Encodable sParams = macAlgId.getParameters();
-                String macAlg = macAlgId.getAlgorithm().getId();
 
                 if (sParams != null && !(sParams instanceof ASN1Null))
                 {

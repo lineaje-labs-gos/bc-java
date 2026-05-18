@@ -74,7 +74,7 @@ public final class XMSSMTPrivateKeyParameters
             {
                 BDSStateMap bdsImport = (BDSStateMap)XMSSUtil.deserialize(bdsStateBinary, BDSStateMap.class);
 
-                bdsState = bdsImport.withWOTSDigest(builder.xmss.getTreeDigestOID());
+                bdsState = bdsImport.withWOTSDigest(builder.xmss.getTreeDigestOID(), builder.xmss.getTreeDigestSize());
             }
             catch (IOException e)
             {
@@ -262,6 +262,7 @@ public final class XMSSMTPrivateKeyParameters
     /**
      * @deprecated use getEncoded() - this method will become private.
      */
+    @Deprecated
     public byte[] toByteArray()
     {
         synchronized (this)

@@ -31,7 +31,7 @@ public class OCSPReqBuilder
         CertificateID   certId;
         Extensions  extensions;
 
-        public RequestObject(
+        RequestObject(
             CertificateID   certId,
             Extensions  extensions)
         {
@@ -39,7 +39,7 @@ public class OCSPReqBuilder
             this.extensions = extensions;
         }
 
-        public Request toRequest()
+        Request toRequest()
             throws Exception
         {
             return new Request(certId.toASN1Primitive(), extensions);
@@ -152,21 +152,20 @@ public class OCSPReqBuilder
 
             AlgorithmIdentifier sigAlgId = contentSigner.getAlgorithmIdentifier();
 
+            DERSequence certs = null;
             if (chain != null && chain.length > 0)
             {
-                ASN1EncodableVector v = new ASN1EncodableVector();
+                ASN1EncodableVector v = new ASN1EncodableVector(chain.length);
 
-                for (int i = 0; i != chain.length; i++)
+                for (int i = 0; i < chain.length; i++)
                 {
                     v.add(chain[i].toASN1Structure());
                 }
 
-                signature = new Signature(sigAlgId, bitSig, new DERSequence(v));
+                certs = new DERSequence(v);
             }
-            else
-            {
-                signature = new Signature(sigAlgId, bitSig);
-            }
+
+            signature = new Signature(sigAlgId, bitSig, certs);
         }
 
         return new OCSPReq(new OCSPRequest(tbsReq, signature));

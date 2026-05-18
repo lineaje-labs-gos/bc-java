@@ -63,8 +63,7 @@ class PGPUtil
         {
             if (s2k.getType() == S2K.ARGON_2)
             {
-                Argon2Parameters.Builder builder = new Argon2Parameters
-                    .Builder(Argon2Parameters.ARGON2_id)
+                Argon2Parameters.Builder builder = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
                     .withSalt(s2k.getIV())
                     .withIterations(s2k.getPasses())
                     .withParallelism(s2k.getParallelism())
@@ -94,17 +93,16 @@ class PGPUtil
 
         try
         {
+            byte[] iv = s2k != null? s2k.getIV() : null;
             while (generatedBytes < keyBytes.length)
             {
+                for (int i = 0; i != loopCount; i++)
+                {
+                    dOut.write(0);
+                }
+
                 if (s2k != null)
                 {
-                    for (int i = 0; i != loopCount; i++)
-                    {
-                        dOut.write(0);
-                    }
-
-                    byte[] iv = s2k.getIV();
-
                     switch (s2k.getType())
                     {
                     case S2K.SIMPLE:
@@ -152,28 +150,15 @@ class PGPUtil
                 }
                 else
                 {
-                    for (int i = 0; i != loopCount; i++)
-                    {
-                        dOut.write((byte)0);
-                    }
-
                     dOut.write(pBytes);
                 }
 
                 dOut.close();
 
                 byte[] dig = digestCalculator.getDigest();
-
-                if (dig.length > (keyBytes.length - generatedBytes))
-                {
-                    System.arraycopy(dig, 0, keyBytes, generatedBytes, keyBytes.length - generatedBytes);
-                }
-                else
-                {
-                    System.arraycopy(dig, 0, keyBytes, generatedBytes, dig.length);
-                }
-
-                generatedBytes += dig.length;
+                int toCopy = Math.min(dig.length, keyBytes.length - generatedBytes);
+                System.arraycopy(dig, 0, keyBytes, generatedBytes, toCopy);
+                generatedBytes += toCopy;
 
                 loopCount++;
             }

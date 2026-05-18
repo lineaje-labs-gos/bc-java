@@ -7,7 +7,12 @@ import org.bouncycastle.bcpg.UserAttributeSubpacket;
 import org.bouncycastle.bcpg.UserAttributeSubpacketTags;
 
 /**
- * Basic type for a image attribute packet.
+ * User-Attribute Subpacket used to encode an image, e.g. the user's avatar.
+ *
+ * @see <a href="https://datatracker.ietf.org/doc/html/rfc4880#section-5.12.1">
+ *     RFC4880 - Image Attribute Subpacket</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9580.html#name-the-image-attribute-subpack">
+ *     RFC9580 - Image Attribute Subpacket</a>
  */
 public class ImageAttribute 
     extends UserAttributeSubpacket
@@ -32,8 +37,16 @@ public class ImageAttribute
         byte[]    data)
     {
         super(UserAttributeSubpacketTags.IMAGE_ATTRIBUTE, forceLongLength, data);
+        if (data.length < 4)
+        {
+            throw new IllegalArgumentException("Malformed ImageAttribute. Data length too short: " + data.length);
+        }
         
         hdrLength = ((data[1] & 0xff) << 8) | (data[0] & 0xff);
+        if (data.length < hdrLength)
+        {
+            throw new IllegalArgumentException("Malformed ImageAttribute. Header length exceeds data length.");
+        }
         version = data[2] & 0xff;
         encoding = data[3] & 0xff;
         

@@ -2,10 +2,9 @@ package org.bouncycastle.asn1;
 
 import java.io.IOException;
 
+import org.bouncycastle.util.Exceptions;
 /**
  * Parser for indefinite-length SEQUENCEs.
- * 
- * @deprecated Check for 'ASN1SequenceParser' instead 
  */
 public class BERSequenceParser
     implements ASN1SequenceParser
@@ -54,7 +53,7 @@ public class BERSequenceParser
         }
         catch (IOException e)
         {
-            throw new IllegalStateException(e.getMessage());
+            throw Exceptions.illegalStateException(e.getMessage(), e);
         }
     }
 

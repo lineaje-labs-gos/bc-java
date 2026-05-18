@@ -2,7 +2,6 @@ package org.bouncycastle.cms;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Collections;
 
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Integer;
@@ -11,7 +10,6 @@ import org.bouncycastle.asn1.BERSequenceGenerator;
 import org.bouncycastle.asn1.DLSet;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.cms.EnvelopedData;
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.operator.OutputAEADEncryptor;
 import org.bouncycastle.operator.OutputEncryptor;
 
@@ -33,6 +31,17 @@ import org.bouncycastle.operator.OutputEncryptor;
  *
  *      out.close();
  * </pre>
+ * <p>
+ * <b>Stream handling note:</b>
+ * <ul>
+ *   <li>The returned OutputStream must be closed to finalize the CMS structure.</li>
+ *   <li>Closing the returned stream <b>does not close</b> the underlying OutputStream
+ *       passed to {@code open()}.</li>
+ *   <li>Callers are responsible for closing the underlying OutputStream separately.
+ *       If the underlying OutputStream is a buffering encoder whose tail state
+ *       only flushes on close (e.g. Apache Commons {@code Base64OutputStream}),
+ *       failing to close it will cause the encoded output to be truncated.</li>
+ * </ul>
  */
 public class CMSEnvelopedDataStreamGenerator
     extends CMSEnvelopedGenerator
@@ -72,20 +81,9 @@ public class CMSEnvelopedDataStreamGenerator
         if (unprotectedAttributeGenerator != null)
         {
             // mark unprotected attributes as non-null.
-            return new ASN1Integer(EnvelopedData.calculateVersion(originatorInfo, new DLSet(recipientInfos), new DLSet()));
+            return ASN1Integer.valueOf(EnvelopedData.calculateVersion(originatorInfo, new DLSet(recipientInfos), new DLSet()));
         }
-        return new ASN1Integer(EnvelopedData.calculateVersion(originatorInfo, new DLSet(recipientInfos), null));
-    }
-
-    private OutputStream doOpen(
-        ASN1ObjectIdentifier dataType,
-        OutputStream         out,
-        OutputEncryptor      encryptor)
-        throws IOException, CMSException
-    {
-        ASN1EncodableVector recipientInfos = CMSUtils.getRecipentInfos(encryptor.getKey(), recipientInfoGenerators);
-
-        return open(dataType, out, recipientInfos, encryptor);
+        return ASN1Integer.valueOf(EnvelopedData.calculateVersion(originatorInfo, new DLSet(recipientInfos), null));
     }
 
     protected OutputStream open(
@@ -95,36 +93,25 @@ public class CMSEnvelopedDataStreamGenerator
         OutputEncryptor      encryptor)
         throws IOException
     {
-        //
         // ContentInfo
-        //
         BERSequenceGenerator cGen = new BERSequenceGenerator(out);
-
         cGen.addObject(CMSObjectIdentifiers.envelopedData);
 
-        //
-        // Encrypted Data
-        //
+        // EnvelopedData
         BERSequenceGenerator envGen = new BERSequenceGenerator(cGen.getRawOutputStream(), 0, true);
-
         envGen.addObject(getVersion(recipientInfos));
-
         CMSUtils.addOriginatorInfoToGenerator(envGen, originatorInfo);
-
         CMSUtils.addRecipientInfosToGenerator(recipientInfos, envGen, _berEncodeRecipientSet);
 
-        BERSequenceGenerator eiGen = new BERSequenceGenerator(envGen.getRawOutputStream());
+        // EncryptedContentInfo
+        BERSequenceGenerator eciGen = new BERSequenceGenerator(envGen.getRawOutputStream());
+        eciGen.addObject(dataType);
+        eciGen.addObject(encryptor.getAlgorithmIdentifier());
 
-        eiGen.addObject(dataType);
+        // encryptedContent [0] IMPLICIT EncryptedContent OPTIONAL (EncryptedContent ::= OCTET STRING)
+        OutputStream ecStream = CMSUtils.createBEROctetOutputStream(eciGen.getRawOutputStream(), 0, false, _bufferSize);
 
-        AlgorithmIdentifier encAlgId = encryptor.getAlgorithmIdentifier();
-
-        eiGen.getRawOutputStream().write(encAlgId.getEncoded());
-
-        OutputStream octetStream = CMSUtils.createBEROctetOutputStream(
-            eiGen.getRawOutputStream(), 0, false, _bufferSize);
-
-        return new CmsEnvelopedDataOutputStream(encryptor, octetStream, cGen, envGen, eiGen);
+        return new CmsEnvelopedDataOutputStream(encryptor, ecStream, cGen, envGen, eciGen);
     }
 
     protected OutputStream open(
@@ -147,12 +134,9 @@ public class CMSEnvelopedDataStreamGenerator
      * generate an enveloped object that contains an CMS Enveloped Data
      * object using the given encryptor.
      */
-    public OutputStream open(
-        OutputStream    out,
-        OutputEncryptor encryptor)
-        throws CMSException, IOException
+    public OutputStream open(OutputStream out, OutputEncryptor encryptor) throws CMSException, IOException
     {
-        return doOpen(new ASN1ObjectIdentifier(CMSObjectIdentifiers.data.getId()), out, encryptor);
+        return open(CMSObjectIdentifiers.data, out, encryptor);
     }
 
     /**
@@ -160,13 +144,12 @@ public class CMSEnvelopedDataStreamGenerator
      * object using the given encryptor and marking the data as being of the passed
      * in type.
      */
-    public OutputStream open(
-        ASN1ObjectIdentifier dataType,
-        OutputStream         out,
-        OutputEncryptor      encryptor)
+    public OutputStream open(ASN1ObjectIdentifier dataType, OutputStream out, OutputEncryptor encryptor)
         throws CMSException, IOException
     {
-        return doOpen(dataType, out, encryptor);
+        ASN1EncodableVector recipientInfos = CMSUtils.getRecipentInfos(encryptor.getKey(), recipientInfoGenerators);
+
+        return open(dataType, out, recipientInfos, encryptor);
     }
 
     private class CmsEnvelopedDataOutputStream
@@ -229,7 +212,7 @@ public class CMSEnvelopedDataStreamGenerator
             }
             _eiGen.close();
 
-            CMSUtils.addAttriSetToGenerator(_envGen, unprotectedAttributeGenerator, 1, Collections.EMPTY_MAP);
+            CMSUtils.addAttriSetToGenerator(_envGen, unprotectedAttributeGenerator, 1, CMSUtils.getEmptyParameters());
 
             _envGen.close();
             _cGen.close();

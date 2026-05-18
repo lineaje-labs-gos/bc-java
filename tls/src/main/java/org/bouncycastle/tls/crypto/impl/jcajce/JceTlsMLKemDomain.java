@@ -1,14 +1,11 @@
 package org.bouncycastle.tls.crypto.impl.jcajce;
 
-import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
-import org.bouncycastle.crypto.SecretWithEncapsulation;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKEMExtractor;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKEMGenerator;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKeyGenerationParameters;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKeyPairGenerator;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberParameters;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberPrivateKeyParameters;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberPublicKeyParameters;
+import java.io.IOException;
+import java.security.KeyPair;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+
+import org.bouncycastle.jcajce.SecretKeyWithEncapsulation;
 import org.bouncycastle.tls.NamedGroup;
 import org.bouncycastle.tls.crypto.TlsAgreement;
 import org.bouncycastle.tls.crypto.TlsKemConfig;
@@ -16,31 +13,14 @@ import org.bouncycastle.tls.crypto.TlsKemDomain;
 
 public class JceTlsMLKemDomain implements TlsKemDomain
 {
-    protected static KyberParameters getKyberParameters(int namedGroup)
-    {
-        switch (namedGroup)
-        {
-        case NamedGroup.OQS_mlkem512:
-            return KyberParameters.kyber512;
-        case NamedGroup.OQS_mlkem768:
-        case NamedGroup.DRAFT_mlkem768:
-            return KyberParameters.kyber768;
-        case NamedGroup.OQS_mlkem1024:
-        case NamedGroup.DRAFT_mlkem1024:
-            return KyberParameters.kyber1024;
-        default:
-            return null;
-        }
-    }
-
     protected final JcaTlsCrypto crypto;
-    protected final KyberParameters kyberParameters;
+    protected final String kemName;
     protected final boolean isServer;
 
     public JceTlsMLKemDomain(JcaTlsCrypto crypto, TlsKemConfig kemConfig)
     {
         this.crypto = crypto;
-        this.kyberParameters = getKyberParameters(kemConfig.getNamedGroup());
+        this.kemName = NamedGroup.getKemName(kemConfig.getNamedGroup());
         this.isServer = kemConfig.isServer();
     }
 
@@ -54,34 +34,31 @@ public class JceTlsMLKemDomain implements TlsKemDomain
         return new JceTlsMLKem(this);
     }
 
-    public JceTlsSecret decapsulate(KyberPrivateKeyParameters privateKey, byte[] ciphertext)
+    public JceTlsSecret decapsulate(PrivateKey privateKey, byte[] ciphertext)
     {
-        KyberKEMExtractor kemExtract = new KyberKEMExtractor(privateKey);
-        byte[] secret = kemExtract.extractSecret(ciphertext);
-        return adoptLocalSecret(secret);
+        return KemUtil.decapsulate(crypto, kemName, privateKey, ciphertext);
     }
 
-    public KyberPublicKeyParameters decodePublicKey(byte[] encoding)
+    public PublicKey decodePublicKey(byte[] encoding)
+        throws IOException
     {
-        return new KyberPublicKeyParameters(kyberParameters, encoding);
+        return KemUtil.decodePublicKey(crypto, kemName, encoding);
     }
 
-    public SecretWithEncapsulation encapsulate(KyberPublicKeyParameters publicKey)
+    public SecretKeyWithEncapsulation encapsulate(PublicKey publicKey)
     {
-        KyberKEMGenerator kemGen = new KyberKEMGenerator(crypto.getSecureRandom());
-        return kemGen.generateEncapsulated(publicKey);
+        return KemUtil.encapsulate(crypto, kemName, publicKey);
     }
 
-    public byte[] encodePublicKey(KyberPublicKeyParameters publicKey)
+    public byte[] encodePublicKey(PublicKey publicKey)
+        throws IOException
     {
-        return publicKey.getEncoded();
+        return KemUtil.encodePublicKey(publicKey);
     }
 
-    public AsymmetricCipherKeyPair generateKeyPair()
+    public KeyPair generateKeyPair()
     {
-        KyberKeyPairGenerator keyPairGenerator = new KyberKeyPairGenerator();
-        keyPairGenerator.init(new KyberKeyGenerationParameters(crypto.getSecureRandom(), kyberParameters));
-        return keyPairGenerator.generateKeyPair();
+        return KemUtil.generateKeyPair(crypto, kemName);
     }
 
     public boolean isServer()

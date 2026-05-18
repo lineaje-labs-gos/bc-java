@@ -4,7 +4,13 @@ import org.bouncycastle.bcpg.SignatureSubpacket;
 import org.bouncycastle.bcpg.SignatureSubpacketTags;
 
 /**
- * packet giving signature expiration time.
+ * Signature Subpacket containing the number of seconds after the signatures creation
+ * time after which the signature expires.
+ *
+ * @see <a href="https://datatracker.ietf.org/doc/html/rfc4880#section-5.2.3.10">
+ *     RFC4880 - Signature Expiration Time</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9580.html#name-signature-expiration-time">
+ *     RFC9580 - Signature Expiration Time</a>
  */
 public class SignatureExpirationTime 
     extends SignatureSubpacket
@@ -23,7 +29,7 @@ public class SignatureExpirationTime
         boolean    isLongLength,
         byte[]     data)
     {
-        super(SignatureSubpacketTags.EXPIRE_TIME, critical, isLongLength, data);
+        super(SignatureSubpacketTags.EXPIRE_TIME, critical, isLongLength, verifyData(data));
     }
 
     public SignatureExpirationTime(
@@ -33,6 +39,15 @@ public class SignatureExpirationTime
         super(SignatureSubpacketTags.EXPIRE_TIME, critical, false, Utils.timeToBytes(seconds));
     }
 
+    private static byte[] verifyData(byte[] data)
+    {
+        if (data.length != 4)
+        {
+            throw new IllegalArgumentException("Malformed data length. Expected 4, got " + data.length);
+        }
+        return data;
+    }
+    
     /**
      * return time in seconds before signature expires after creation time.
      */

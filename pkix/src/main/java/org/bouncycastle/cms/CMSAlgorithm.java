@@ -3,6 +3,7 @@ package org.bouncycastle.cms;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.bsi.BSIObjectIdentifiers;
 import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
+import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.asn1.kisa.KISAObjectIdentifiers;
 import org.bouncycastle.asn1.misc.MiscObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
@@ -12,6 +13,7 @@ import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.rosstandart.RosstandartObjectIdentifiers;
 import org.bouncycastle.asn1.sec.SECObjectIdentifiers;
 import org.bouncycastle.asn1.teletrust.TeleTrusTObjectIdentifiers;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 
 public class CMSAlgorithm
@@ -41,11 +43,15 @@ public class CMSAlgorithm
     public static final ASN1ObjectIdentifier  CAMELLIA256_CBC = NTTObjectIdentifiers.id_camellia256_cbc.intern();
     public static final ASN1ObjectIdentifier  GOST28147_GCFB  = CryptoProObjectIdentifiers.gostR28147_gcfb.intern();
     public static final ASN1ObjectIdentifier  SEED_CBC        = KISAObjectIdentifiers.id_seedCBC.intern();
+    public static final ASN1ObjectIdentifier  SM4_CBC         = GMObjectIdentifiers.sms4_cbc.intern();
 
     public static final ASN1ObjectIdentifier  DES_EDE3_WRAP   = PKCSObjectIdentifiers.id_alg_CMS3DESwrap.intern();
     public static final ASN1ObjectIdentifier  AES128_WRAP     = NISTObjectIdentifiers.id_aes128_wrap.intern();
     public static final ASN1ObjectIdentifier  AES192_WRAP     = NISTObjectIdentifiers.id_aes192_wrap.intern();
     public static final ASN1ObjectIdentifier  AES256_WRAP     = NISTObjectIdentifiers.id_aes256_wrap.intern();
+    public static final ASN1ObjectIdentifier  AES128_WRAP_PAD     = NISTObjectIdentifiers.id_aes128_wrap_pad.intern();
+    public static final ASN1ObjectIdentifier  AES192_WRAP_PAD     = NISTObjectIdentifiers.id_aes192_wrap_pad.intern();
+    public static final ASN1ObjectIdentifier  AES256_WRAP_PAD     = NISTObjectIdentifiers.id_aes256_wrap_pad.intern();
     public static final ASN1ObjectIdentifier  CAMELLIA128_WRAP = NTTObjectIdentifiers.id_camellia128_wrap.intern();
     public static final ASN1ObjectIdentifier  CAMELLIA192_WRAP = NTTObjectIdentifiers.id_camellia192_wrap.intern();
     public static final ASN1ObjectIdentifier  CAMELLIA256_WRAP = NTTObjectIdentifiers.id_camellia256_wrap.intern();
@@ -73,6 +79,13 @@ public class CMSAlgorithm
     public static final ASN1ObjectIdentifier  ECDH_SHA512KDF    = SECObjectIdentifiers.dhSinglePass_stdDH_sha512kdf_scheme.intern();
     public static final ASN1ObjectIdentifier  ECCDH_SHA512KDF    = SECObjectIdentifiers.dhSinglePass_cofactorDH_sha512kdf_scheme.intern();
     public static final ASN1ObjectIdentifier  ECMQV_SHA512KDF   = SECObjectIdentifiers.mqvSinglePass_sha512kdf_scheme.intern();
+
+    /** RFC 8418 - dhSinglePass-stdDH-hkdf-sha256-scheme (use with X25519 or X448 recipient keys). */
+    public static final ASN1ObjectIdentifier  ECDH_HKDF_SHA256 = PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha256_scheme.intern();
+    /** RFC 8418 - dhSinglePass-stdDH-hkdf-sha384-scheme (use with X25519 or X448 recipient keys). */
+    public static final ASN1ObjectIdentifier  ECDH_HKDF_SHA384 = PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha384_scheme.intern();
+    /** RFC 8418 - dhSinglePass-stdDH-hkdf-sha512-scheme (use with X25519 or X448 recipient keys). */
+    public static final ASN1ObjectIdentifier  ECDH_HKDF_SHA512 = PKCSObjectIdentifiers.dhSinglePass_stdDH_hkdf_sha512_scheme.intern();
 
     public static final ASN1ObjectIdentifier  ECDHGOST3410_2001    = CryptoProObjectIdentifiers.gostR3410_2001.intern();
     public static final ASN1ObjectIdentifier  ECDHGOST3410_2012_256 = RosstandartObjectIdentifiers.id_tc26_agreement_gost_3410_12_256.intern();
@@ -102,4 +115,12 @@ public class CMSAlgorithm
 
     public static final ASN1ObjectIdentifier  SHAKE128_LEN = NISTObjectIdentifiers.id_shake128_len.intern();
     public static final ASN1ObjectIdentifier  SHAKE256_LEN = NISTObjectIdentifiers.id_shake256_len.intern();
+    public static final ASN1ObjectIdentifier  ChaCha20Poly1305 = PKCSObjectIdentifiers.id_alg_AEADChaCha20Poly1305.intern();
+
+    public static final AlgorithmIdentifier   SHAKE128_XOF = new AlgorithmIdentifier(NISTObjectIdentifiers.id_shake128);
+    public static final AlgorithmIdentifier   SHAKE256_XOF = new AlgorithmIdentifier(NISTObjectIdentifiers.id_shake256);
+
+    public static final AlgorithmIdentifier   SHA256_HKDF = new AlgorithmIdentifier(PKCSObjectIdentifiers.id_alg_hkdf_with_sha256);
+    public static final AlgorithmIdentifier   SHA384_HKDF = new AlgorithmIdentifier(PKCSObjectIdentifiers.id_alg_hkdf_with_sha384);
+    public static final AlgorithmIdentifier   SHA512_HKDF = new AlgorithmIdentifier(PKCSObjectIdentifiers.id_alg_hkdf_with_sha512);
 }

@@ -20,6 +20,7 @@ import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -921,37 +922,23 @@ public class X509Name
     {
         if (seq == null)
         {
-            ASN1EncodableVector  vec = new ASN1EncodableVector();
-            ASN1EncodableVector  sVec = new ASN1EncodableVector();
-            ASN1ObjectIdentifier  lstOid = null;
-            
+            ASN1EncodableVector vec = new ASN1EncodableVector();
+            ASN1EncodableVector sVec = new ASN1EncodableVector();
+            ASN1ObjectIdentifier oid = null;
+
             for (int i = 0; i != ordering.size(); i++)
             {
-                ASN1EncodableVector     v = new ASN1EncodableVector(2);
-                ASN1ObjectIdentifier     oid = (ASN1ObjectIdentifier)ordering.elementAt(i);
-
-                v.add(oid);
-
-                String  str = (String)values.elementAt(i);
-
-                v.add(converter.getConvertedValue(oid, str));
- 
-                if (lstOid == null 
-                    || ((Boolean)this.added.elementAt(i)).booleanValue())
-                {
-                    sVec.add(new DERSequence(v));
-                }
-                else
+                if (oid != null && !((Boolean)this.added.elementAt(i)).booleanValue())
                 {
                     vec.add(new DERSet(sVec));
-
                     sVec = new ASN1EncodableVector();
-                    sVec.add(new DERSequence(v));
                 }
-                
-                lstOid = oid;
+
+                oid = (ASN1ObjectIdentifier)ordering.elementAt(i);
+                ASN1Primitive convertedValue = converter.getConvertedValue(oid, (String)values.elementAt(i));
+                sVec.add(new DERSequence(oid, convertedValue));
             }
-            
+
             vec.add(new DERSet(sVec));
             
             seq = new DERSequence(vec);
@@ -1093,6 +1080,11 @@ public class X509Name
         {
             return false;
         }
+
+        if (orderingSize == 0)
+        {
+            return true;
+        }
         
         boolean[] indexes = new boolean[orderingSize];
         int       start, end, delta;
@@ -1191,7 +1183,7 @@ public class X509Name
         }
         catch (IOException e)
         {
-            throw new IllegalStateException("unknown encoding in name: " + e);
+            throw Exceptions.illegalStateException("unknown encoding in name", e);
         }
     }
 

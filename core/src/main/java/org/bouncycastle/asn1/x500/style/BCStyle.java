@@ -103,29 +103,29 @@ public class BCStyle
     /**
      * RFC 3039 DateOfBirth - GeneralizedTime - YYYYMMDD000000Z
      */
-    public static final ASN1ObjectIdentifier DATE_OF_BIRTH = new ASN1ObjectIdentifier("1.3.6.1.5.5.7.9.1").intern();
+    public static final ASN1ObjectIdentifier DATE_OF_BIRTH = X509ObjectIdentifiers.id_pda.branch("1").intern();
 
     /**
      * RFC 3039 PlaceOfBirth - DirectoryString(SIZE(1..128)
      */
-    public static final ASN1ObjectIdentifier PLACE_OF_BIRTH = new ASN1ObjectIdentifier("1.3.6.1.5.5.7.9.2").intern();
+    public static final ASN1ObjectIdentifier PLACE_OF_BIRTH = X509ObjectIdentifiers.id_pda.branch("2").intern();
 
     /**
      * RFC 3039 Gender - PrintableString (SIZE(1)) -- "M", "F", "m" or "f"
      */
-    public static final ASN1ObjectIdentifier GENDER = new ASN1ObjectIdentifier("1.3.6.1.5.5.7.9.3").intern();
+    public static final ASN1ObjectIdentifier GENDER = X509ObjectIdentifiers.id_pda.branch("3").intern();
 
     /**
      * RFC 3039 CountryOfCitizenship - PrintableString (SIZE (2)) -- ISO 3166
      * codes only
      */
-    public static final ASN1ObjectIdentifier COUNTRY_OF_CITIZENSHIP = new ASN1ObjectIdentifier("1.3.6.1.5.5.7.9.4").intern();
+    public static final ASN1ObjectIdentifier COUNTRY_OF_CITIZENSHIP = X509ObjectIdentifiers.id_pda.branch("4").intern();
 
     /**
      * RFC 3039 CountryOfResidence - PrintableString (SIZE (2)) -- ISO 3166
      * codes only
      */
-    public static final ASN1ObjectIdentifier COUNTRY_OF_RESIDENCE = new ASN1ObjectIdentifier("1.3.6.1.5.5.7.9.5").intern();
+    public static final ASN1ObjectIdentifier COUNTRY_OF_RESIDENCE = X509ObjectIdentifiers.id_pda.branch("5").intern();
 
 
     /**
@@ -278,6 +278,8 @@ public class BCStyle
         DefaultLookUp.put("unstructuredname", UnstructuredName);
         DefaultLookUp.put("uniqueidentifier", UNIQUE_IDENTIFIER);
         DefaultLookUp.put("dn", DN_QUALIFIER);
+        DefaultLookUp.put("dnq", DN_QUALIFIER);
+        DefaultLookUp.put("dnqualifier", DN_QUALIFIER);
         DefaultLookUp.put("pseudonym", PSEUDONYM);
         DefaultLookUp.put("postaladdress", POSTAL_ADDRESS);
         DefaultLookUp.put("nameatbirth", NAME_AT_BIRTH);
@@ -291,9 +293,9 @@ public class BCStyle
         DefaultLookUp.put("telephonenumber", TELEPHONE_NUMBER);
         DefaultLookUp.put("name", NAME);
         DefaultLookUp.put("organizationidentifier", ORGANIZATION_IDENTIFIER);
-        DefaultLookUp.put("jurisdictionCountry", JURISDICTION_C);
-        DefaultLookUp.put("jurisdictionState", JURISDICTION_ST);
-        DefaultLookUp.put("jurisdictionLocality", JURISDICTION_L);
+        DefaultLookUp.put("jurisdictioncountry", JURISDICTION_C);
+        DefaultLookUp.put("jurisdictionstate", JURISDICTION_ST);
+        DefaultLookUp.put("jurisdictionlocality", JURISDICTION_L);
     }
 
     /**
@@ -323,7 +325,31 @@ public class BCStyle
         else if (oid.equals(C) || oid.equals(SERIALNUMBER) || oid.equals(DN_QUALIFIER)
             || oid.equals(TELEPHONE_NUMBER) || oid.equals(JURISDICTION_C))
         {
+            if ((oid.equals(C) || oid.equals(JURISDICTION_C)) && value.length() != 2)
+            {
+                // RFC 5280 sec. 4.1.2.4 / X.520: countryName is
+                // PrintableString (SIZE (2)). CAB Forum Baseline
+                // Requirements 7.1.4.2.1 narrows this to a valid ISO 3166-1
+                // alpha-2 code. Reject obvious-wrong-length input at
+                // build time rather than encode a non-spec value that
+                // will be rejected downstream (github #2011).
+                throw new IllegalArgumentException("country code attribute "
+                    + oid.getId() + " must be exactly 2 characters per ISO 3166-1 / X.520, got "
+                    + value.length() + ": '" + value + "'");
+            }
             return new DERPrintableString(value);
+        }
+        else if (oid.equals(CN) && value.length() > 64)
+        {
+            // RFC 5280 sec. A.1 / X.520: commonName is DirectoryString
+            // { ub-common-name } with ub-common-name = 64. OpenSSL and most
+            // validators reject longer values, so reject at build time
+            // rather than emit a cert that won't verify downstream.
+            // Existing DER-encoded names with longer CNs still parse
+            // because the parse path does not route through this method
+            // (github #750).
+            throw new IllegalArgumentException("commonName length "
+                + value.length() + " exceeds RFC 5280 ub-common-name (64): '" + value + "'");
         }
 
         return super.encodeStringValue(oid, value);
@@ -351,7 +377,7 @@ public class BCStyle
 
     public String toString(X500Name name)
     {
-        StringBuffer buf = new StringBuffer();
+        StringBuilder buf = new StringBuilder();
         boolean first = true;
 
         RDN[] rdns = name.getRDNs();

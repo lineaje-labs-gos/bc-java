@@ -16,8 +16,8 @@ import org.bouncycastle.math.ec.ECPoint;
  * If you want to be compatible with legacy applications however, you should use this class instead.
  * Note though, that for v6 keys, {@link X25519PublicBCPGKey} or {@link X448PublicBCPGKey} MUST be used for X25519, X448.
  *
- * @see <a href="https://www.ietf.org/archive/id/draft-ietf-openpgp-crypto-refresh-13.html#name-algorithm-specific-part-for-ecd">
- *     Crypto-Refresh - Algorithm-Specific Parts for ECDH Keys</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9580.html#name-algorithm-specific-part-for-ecd">
+ *     OpenPGP - Algorithm-Specific Parts for ECDH Keys</a>
  */
 public class ECDHPublicBCPGKey
     extends ECPublicBCPGKey
@@ -36,12 +36,12 @@ public class ECDHPublicBCPGKey
         super(in);
 
         int length = in.read();
-        byte[] kdfParameters = new byte[length];
-        if (kdfParameters.length != 3)
+        if (length != 3)
         {
-            throw new IllegalStateException("kdf parameters size of 3 expected.");
+            throw new MalformedPacketException("KDF parameters size of 3 expected.");
         }
 
+        byte[] kdfParameters = new byte[length];
         in.readFully(kdfParameters);
 
         reserved = kdfParameters[0];

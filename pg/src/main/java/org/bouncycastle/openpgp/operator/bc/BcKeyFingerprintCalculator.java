@@ -23,8 +23,12 @@ public class BcKeyFingerprintCalculator
         BCPGKey key = publicPk.getKey();
         Digest digest;
 
-        if (publicPk.getVersion() <= 3)
+        if (publicPk.getVersion() <= PublicKeyPacket.VERSION_3)
         {
+            if (!(key instanceof RSAPublicBCPGKey))
+            {
+                throw new PGPException("Version 3 OpenPGP keys can only use RSA. Found " + key.getClass().getName());
+            }
             RSAPublicBCPGKey rK = (RSAPublicBCPGKey)key;
 
             try
@@ -42,7 +46,7 @@ public class BcKeyFingerprintCalculator
                 throw new PGPException("can't encode key components: " + e.getMessage(), e);
             }
         }
-        else if (publicPk.getVersion() == 4)
+        else if (publicPk.getVersion() == PublicKeyPacket.VERSION_4)
         {
             try
             {
@@ -60,14 +64,14 @@ public class BcKeyFingerprintCalculator
                 throw new PGPException("can't encode key components: " + e.getMessage(), e);
             }
         }
-        else if (publicPk.getVersion() == 6)
+        else if (publicPk.getVersion() == PublicKeyPacket.LIBREPGP_5 || publicPk.getVersion() == PublicKeyPacket.VERSION_6)
         {
             try
             {
                 byte[] kBytes = publicPk.getEncodedContents();
                 digest = new SHA256Digest();
 
-                digest.update((byte)0x9b);
+                digest.update((byte) (publicPk.getVersion() == PublicKeyPacket.VERSION_6 ? 0x9b : 0x9a));
 
                 digest.update((byte)(kBytes.length >> 24));
                 digest.update((byte)(kBytes.length >> 16));

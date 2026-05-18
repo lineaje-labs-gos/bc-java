@@ -19,16 +19,15 @@ import javax.crypto.ShortBufferException;
 import javax.crypto.spec.SecretKeySpec;
 import javax.security.auth.DestroyFailedException;
 
-import org.bouncycastle.crypto.CryptoServicesRegistrar;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.SecretWithEncapsulation;
 import org.bouncycastle.crypto.Wrapper;
+import org.bouncycastle.crypto.kems.MLKEMExtractor;
+import org.bouncycastle.crypto.kems.MLKEMGenerator;
+import org.bouncycastle.crypto.params.MLKEMParameters;
+import org.bouncycastle.jcajce.provider.asymmetric.util.WrapUtil;
 import org.bouncycastle.jcajce.spec.KEMParameterSpec;
 import org.bouncycastle.jcajce.spec.KTSParameterSpec;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKEMExtractor;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKEMGenerator;
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberParameters;
-import org.bouncycastle.pqc.jcajce.provider.util.WrapUtil;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Strings;
@@ -37,13 +36,13 @@ class KyberCipherSpi
         extends CipherSpi
 {
     private final String algorithmName;
-    private KyberKEMGenerator kemGen;
+    private MLKEMGenerator kemGen;
     private KTSParameterSpec kemParameterSpec;
     private BCKyberPublicKey wrapKey;
     private BCKyberPrivateKey unwrapKey;
 
     private AlgorithmParameters engineParams;
-    private KyberParameters kyberParameters;
+    private MLKEMParameters kyberParameters;
 
     KyberCipherSpi(String algorithmName)
     {
@@ -51,7 +50,7 @@ class KyberCipherSpi
         this.kyberParameters = null;
     }
 
-    KyberCipherSpi(KyberParameters kyberParameters)
+    KyberCipherSpi(MLKEMParameters kyberParameters)
     {
         this.kyberParameters = kyberParameters;
         this.algorithmName = Strings.toUpperCase(kyberParameters.getName());
@@ -154,7 +153,7 @@ class KyberCipherSpi
             if (key instanceof BCKyberPublicKey)
             {
                 wrapKey = (BCKyberPublicKey)key;
-                kemGen = new KyberKEMGenerator(CryptoServicesRegistrar.getSecureRandom(random));
+                kemGen = new MLKEMGenerator(random);
             }
             else
             {
@@ -235,6 +234,7 @@ class KyberCipherSpi
         throw new IllegalStateException("Not supported in a wrapping mode");
     }
 
+    @SuppressWarnings("Finally")
     protected byte[] engineWrap(
         Key key)
         throws IllegalBlockSizeException, InvalidKeyException
@@ -296,7 +296,7 @@ class KyberCipherSpi
         byte[] secret = null;
         try
         {
-            KyberKEMExtractor kemExt = new KyberKEMExtractor(unwrapKey.getKeyParams());
+            MLKEMExtractor kemExt = new MLKEMExtractor(unwrapKey.getKeyParams());
 
             secret = kemExt.extractSecret(Arrays.copyOfRange(wrappedKey, 0, kemExt.getEncapsulationLength()));
 
@@ -340,7 +340,7 @@ class KyberCipherSpi
     {
         public Kyber512()
         {
-            super(KyberParameters.kyber512);
+            super(MLKEMParameters.ml_kem_512);
         }
     }
 
@@ -349,7 +349,7 @@ class KyberCipherSpi
     {
         public Kyber768()
         {
-            super(KyberParameters.kyber768);
+            super(MLKEMParameters.ml_kem_768);
         }
     }
 
@@ -358,7 +358,7 @@ class KyberCipherSpi
     {
         public Kyber1024()
         {
-            super(KyberParameters.kyber1024);
+            super(MLKEMParameters.ml_kem_1024);
         }
     }
 }

@@ -6,6 +6,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 
 /**
  * ASN.1 <code>SEQUENCE</code> and <code>SEQUENCE OF</code> constructs.
@@ -98,7 +99,7 @@ public abstract class ASN1Sequence
             }
             catch (IOException e)
             {
-                throw new IllegalArgumentException("failed to construct sequence from byte[]: " + e.getMessage());
+                throw Exceptions.illegalArgumentException("failed to construct sequence from byte[]", e);
             }
         }
 
@@ -116,15 +117,20 @@ public abstract class ASN1Sequence
      * be using this method.
      *
      * @param taggedObject the tagged object.
-     * @param explicit true if the object is meant to be explicitly tagged,
+     * @param declaredExplicit true if the object is meant to be explicitly tagged,
      *          false otherwise.
      * @exception IllegalArgumentException if the tagged object cannot
      *          be converted.
      * @return an ASN1Sequence instance.
      */
-    public static ASN1Sequence getInstance(ASN1TaggedObject taggedObject, boolean explicit)
+    public static ASN1Sequence getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
     {
-        return (ASN1Sequence)TYPE.getContextInstance(taggedObject, explicit);
+        return (ASN1Sequence)TYPE.getContextTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1Sequence getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1Sequence)TYPE.getTagged(taggedObject, declaredExplicit);
     }
 
     // NOTE: Only non-final to support LazyEncodedSequence
@@ -150,6 +156,25 @@ public abstract class ASN1Sequence
         }
 
         this.elements = new ASN1Encodable[]{ element };
+    }
+
+    /**
+     * Create a SEQUENCE containing two objects.
+     * @param element1 the first object to be put in the SEQUENCE.
+     * @param element2 the second object to be put in the SEQUENCE.
+     */
+    protected ASN1Sequence(ASN1Encodable element1, ASN1Encodable element2)
+    {
+        if (null == element1)
+        {
+            throw new NullPointerException("'element1' cannot be null");
+        }
+        if (null == element2)
+        {
+            throw new NullPointerException("'element2' cannot be null");
+        }
+
+        this.elements = new ASN1Encodable[]{ element1, element2 };
     }
 
     /**
@@ -364,7 +389,7 @@ public abstract class ASN1Sequence
             return "[]";
         }
 
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         sb.append('[');
         for (int i = 0;;)
         {

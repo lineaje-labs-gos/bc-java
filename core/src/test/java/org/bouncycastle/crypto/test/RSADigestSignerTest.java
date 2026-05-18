@@ -2,15 +2,24 @@ package org.bouncycastle.crypto.test;
 
 import java.math.BigInteger;
 
+import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.teletrust.TeleTrusTObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.DigestInfo;
 import org.bouncycastle.asn1.x509.X509ObjectIdentifiers;
 import org.bouncycastle.crypto.CryptoException;
 import org.bouncycastle.crypto.Digest;
+import org.bouncycastle.crypto.digests.MD2Digest;
+import org.bouncycastle.crypto.digests.MD4Digest;
+import org.bouncycastle.crypto.digests.MD5Digest;
 import org.bouncycastle.crypto.digests.NullDigest;
+import org.bouncycastle.crypto.digests.RIPEMD128Digest;
+import org.bouncycastle.crypto.digests.RIPEMD160Digest;
+import org.bouncycastle.crypto.digests.RIPEMD256Digest;
 import org.bouncycastle.crypto.digests.SHA1Digest;
 import org.bouncycastle.crypto.digests.SHA224Digest;
 import org.bouncycastle.crypto.digests.SHA256Digest;
@@ -21,6 +30,7 @@ import org.bouncycastle.crypto.digests.SHA512tDigest;
 import org.bouncycastle.crypto.params.RSAKeyParameters;
 import org.bouncycastle.crypto.params.RSAPrivateCrtKeyParameters;
 import org.bouncycastle.crypto.signers.RSADigestSigner;
+import org.bouncycastle.util.Properties;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.test.SimpleTest;
 
@@ -46,12 +56,13 @@ public class RSADigestSignerTest
         RSAKeyParameters rsaPublic = new RSAKeyParameters(false, rsaPubMod, rsaPubExp);
         RSAPrivateCrtKeyParameters rsaPrivate = new RSAPrivateCrtKeyParameters(rsaPrivMod, rsaPubExp, rsaPrivExp, rsaPrivP, rsaPrivQ, rsaPrivDP, rsaPrivDQ, rsaPrivQinv);
 
-        checkDigest(rsaPublic, rsaPrivate, new SHA1Digest(), X509ObjectIdentifiers.id_SHA1);
-        checkNullDigest(rsaPublic, rsaPrivate, new SHA1Digest(), X509ObjectIdentifiers.id_SHA1);
+        checkDigest(rsaPublic, rsaPrivate, new RIPEMD128Digest(), TeleTrusTObjectIdentifiers.ripemd128);
+        checkDigest(rsaPublic, rsaPrivate, new RIPEMD160Digest(), TeleTrusTObjectIdentifiers.ripemd160);
+        checkDigest(rsaPublic, rsaPrivate, new RIPEMD256Digest(), TeleTrusTObjectIdentifiers.ripemd256);
 
+        checkDigest(rsaPublic, rsaPrivate, new SHA1Digest(), X509ObjectIdentifiers.id_SHA1);
         checkDigest(rsaPublic, rsaPrivate, new SHA224Digest(), NISTObjectIdentifiers.id_sha224);
         checkDigest(rsaPublic, rsaPrivate, SHA256Digest.newInstance(), NISTObjectIdentifiers.id_sha256);
-        checkNullDigest(rsaPublic, rsaPrivate, SHA256Digest.newInstance(), NISTObjectIdentifiers.id_sha256);
         checkDigest(rsaPublic, rsaPrivate, new SHA384Digest(), NISTObjectIdentifiers.id_sha384);
         checkDigest(rsaPublic, rsaPrivate, new SHA512Digest(), NISTObjectIdentifiers.id_sha512);
         checkDigest(rsaPublic, rsaPrivate, new SHA512tDigest(224), NISTObjectIdentifiers.id_sha512_224);
@@ -62,12 +73,17 @@ public class RSADigestSignerTest
         checkDigest(rsaPublic, rsaPrivate, new SHA3Digest(384), NISTObjectIdentifiers.id_sha3_384);
         checkDigest(rsaPublic, rsaPrivate, new SHA3Digest(512), NISTObjectIdentifiers.id_sha3_512);
 
-        // Null format test
-        RSADigestSigner signer = new RSADigestSigner(new NullDigest());
-        
-        signer.init(true, rsaPrivate);
+        checkDigest(rsaPublic, rsaPrivate, new MD2Digest(), PKCSObjectIdentifiers.md2);
+        checkDigest(rsaPublic, rsaPrivate, new MD4Digest(), PKCSObjectIdentifiers.md4);
+        checkDigest(rsaPublic, rsaPrivate, new MD5Digest(), PKCSObjectIdentifiers.md5);
 
-        signer.update(new byte[16], 0, 16);
+        checkNullDigest(rsaPublic, rsaPrivate, new SHA1Digest(), X509ObjectIdentifiers.id_SHA1);
+        checkNullDigest(rsaPublic, rsaPrivate, SHA256Digest.newInstance(), NISTObjectIdentifiers.id_sha256);
+
+        // Null format test
+        RSADigestSigner signer = createPrehashSigner();
+        signer.init(true, rsaPrivate);
+        signer.update(new byte[20], 0, 20);
 
         try
         {
@@ -76,7 +92,64 @@ public class RSADigestSignerTest
         }
         catch (CryptoException e)
         {
-            isTrue(e.getMessage().startsWith("unable to encode signature: malformed DigestInfo"));
+            isTrue(e.getMessage().startsWith("unable to encode signature: "));
+        }
+
+        checkStrictDigestInfoIssue2273(rsaPublic, rsaPrivate);
+    }
+
+    private void checkStrictDigestInfoIssue2273(RSAKeyParameters rsaPublic, RSAPrivateCrtKeyParameters rsaPrivate)
+        throws Exception
+    {
+        byte[] msg = new byte[] { 1, 6, 3, 32, 7, 43, 2, 5, 7, 78, 4, 23 };
+
+        // Hand-built no-NULL-parameters DigestInfo (RFC 8017 sec. A.2.4 requires NULL).
+        Digest digest = SHA256Digest.newInstance();
+        byte[] hash = new byte[digest.getDigestSize()];
+        digest.update(msg, 0, msg.length);
+        digest.doFinal(hash, 0);
+
+        // AlgorithmIdentifier(oid) with no parameters yields the non-compliant form.
+        DigestInfo loose = new DigestInfo(new AlgorithmIdentifier(NISTObjectIdentifiers.id_sha256), hash);
+        byte[] looseEnc = loose.getEncoded(ASN1Encoding.DER);
+
+        RSADigestSigner looseSigner = createPrehashSigner();
+        looseSigner.init(true, rsaPrivate);
+        looseSigner.update(looseEnc, 0, looseEnc.length);
+        byte[] looseSig = looseSigner.generateSignature();
+
+        // Default (lenient) verification must accept the no-NULL form.
+        RSADigestSigner verifier = new RSADigestSigner(SHA256Digest.newInstance(), NISTObjectIdentifiers.id_sha256);
+        verifier.init(false, rsaPublic);
+        verifier.update(msg, 0, msg.length);
+        isTrue("lenient (default) verification must accept no-NULL DigestInfo",
+            verifier.verifySignature(looseSig));
+
+        // With PKCS1_STRICT_DIGESTINFO set, the no-NULL form must be rejected.
+        System.setProperty(Properties.PKCS1_STRICT_DIGESTINFO, "true");
+        try
+        {
+            verifier = new RSADigestSigner(SHA256Digest.newInstance(), NISTObjectIdentifiers.id_sha256);
+            verifier.init(false, rsaPublic);
+            verifier.update(msg, 0, msg.length);
+            isTrue("strict verification must reject no-NULL DigestInfo",
+                !verifier.verifySignature(looseSig));
+
+            // The strictly-compliant form must still verify with the property set.
+            RSADigestSigner strictSigner = new RSADigestSigner(SHA256Digest.newInstance(), NISTObjectIdentifiers.id_sha256);
+            strictSigner.init(true, rsaPrivate);
+            strictSigner.update(msg, 0, msg.length);
+            byte[] strictSig = strictSigner.generateSignature();
+
+            verifier = new RSADigestSigner(SHA256Digest.newInstance(), NISTObjectIdentifiers.id_sha256);
+            verifier.init(false, rsaPublic);
+            verifier.update(msg, 0, msg.length);
+            isTrue("strict verification must accept spec-compliant DigestInfo",
+                verifier.verifySignature(strictSig));
+        }
+        finally
+        {
+            System.clearProperty(Properties.PKCS1_STRICT_DIGESTINFO);
         }
     }
 
@@ -104,14 +177,14 @@ public class RSADigestSignerTest
     {
         byte[] msg = new byte[] { 1, 6, 3, 32, 7, 43, 2, 5, 7, 78, 4, 23 };
 
-        RSADigestSigner signer = new RSADigestSigner(new NullDigest());
+        RSADigestSigner signer = createPrehashSigner();
 
         byte[] hash = new byte[digest.getDigestSize()];
         digest.update(msg, 0, msg.length);
         digest.doFinal(hash, 0);
 
         DigestInfo digInfo = new DigestInfo(new AlgorithmIdentifier(digOid, DERNull.INSTANCE), hash);
-        byte[] infoEnc = digInfo.getEncoded();
+        byte[] infoEnc = digInfo.getEncoded(ASN1Encoding.DER);
 
         signer.init(true, rsaPrivate);
 
@@ -127,7 +200,7 @@ public class RSADigestSignerTest
             fail("NONE - RSA Digest Signer failed.");
         }
 
-        signer = new RSADigestSigner(new NullDigest());
+        signer = createPrehashSigner();
         signer.init(false, rsaPublic);
         signer.update(infoEnc, 0, infoEnc.length);
         if (!signer.verifySignature(sig))
@@ -139,5 +212,10 @@ public class RSADigestSignerTest
     public static void main(String[] args)
     {
         runTest(new RSADigestSignerTest());
+    }
+
+    private static RSADigestSigner createPrehashSigner()
+    {
+        return new RSADigestSigner(new NullDigest());
     }
 }

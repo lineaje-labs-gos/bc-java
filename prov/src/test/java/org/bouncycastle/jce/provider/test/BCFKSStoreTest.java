@@ -27,6 +27,8 @@ import java.util.Enumeration;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.bouncycastle.asn1.bc.EncryptedObjectStoreData;
@@ -847,6 +849,15 @@ public class BCFKSStoreTest
         SecretKeySpec hmacKey256 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff01ff"), "HmacSHA256");
         SecretKeySpec hmacKey384 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff0102ff"), "HmacSHA384");
         SecretKeySpec hmacKey512 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff010203ff"), "HmacSHA512");
+        SecretKeySpec hmacKey512_224 = new SecretKeySpec(Hex.decode("ff0102030405060708090a0b0c0d0eff"), "HmacSHA512/224");
+        SecretKeySpec hmacKey512_256 = new SecretKeySpec(Hex.decode("ff0102030405060708090a0b0c0d0eff01ff"), "HmacSHA512/256");
+        SecretKeySpec hmacKey3_224 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff"), "HmacSHA3-224");
+        SecretKeySpec hmacKey3_256 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff01ff"), "HmacSHA3-256");
+        SecretKeySpec hmacKey3_384 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff0102ff"), "HmacSHA3-384");
+        SecretKeySpec hmacKey3_512 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff010203ff"), "HmacSHA3-512");
+
+        SecretKeySpec kmacKey128 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff01fd"), "KMAC128");
+        SecretKeySpec kmacKey256 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0eff010203fd"), "KMAC256");
 
         SecretKeySpec camellia128 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0e0f"), "Camellia");
         SecretKeySpec camellia192 = new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0e0f0001020304050607"), "Camellia");
@@ -865,33 +876,47 @@ public class BCFKSStoreTest
         store1.setKeyEntry("secret7", hmacKey256, "secretPwd7".toCharArray(), null);
         store1.setKeyEntry("secret8", hmacKey384, "secretPwd8".toCharArray(), null);
         store1.setKeyEntry("secret9", hmacKey512, "secretPwd9".toCharArray(), null);
+        store1.setKeyEntry("secret10", hmacKey512_224, "secretPwd10".toCharArray(), null);
+        store1.setKeyEntry("secret11", hmacKey512_256, "secretPwd11".toCharArray(), null);
+        store1.setKeyEntry("secret12", hmacKey3_224, "secretPwd12".toCharArray(), null);
+        store1.setKeyEntry("secret13", hmacKey3_256, "secretPwd13".toCharArray(), null);
+        store1.setKeyEntry("secret14", hmacKey3_384, "secretPwd14".toCharArray(), null);
+        store1.setKeyEntry("secret15", hmacKey3_512, "secretPwd15".toCharArray(), null);
 
-        store1.setKeyEntry("secret10", camellia128, "secretPwd10".toCharArray(), null);
-        store1.setKeyEntry("secret11", camellia192, "secretPwd11".toCharArray(), null);
-        store1.setKeyEntry("secret12", camellia256, "secretPwd12".toCharArray(), null);
-        store1.setKeyEntry("secret13", seed, "secretPwd13".toCharArray(), null);
-        store1.setKeyEntry("secret14", aria128, "secretPwd14".toCharArray(), null);
-        store1.setKeyEntry("secret15", aria192, "secretPwd15".toCharArray(), null);
-        store1.setKeyEntry("secret16", aria256, "secretPwd16".toCharArray(), null);
+        store1.setKeyEntry("secret16", camellia128, "secretPwd16".toCharArray(), null);
+        store1.setKeyEntry("secret17", camellia192, "secretPwd17".toCharArray(), null);
+        store1.setKeyEntry("secret18", camellia256, "secretPwd18".toCharArray(), null);
+        store1.setKeyEntry("secret19", seed, "secretPwd19".toCharArray(), null);
+        store1.setKeyEntry("secret20", aria128, "secretPwd20".toCharArray(), null);
+        store1.setKeyEntry("secret21", aria192, "secretPwd21".toCharArray(), null);
+        store1.setKeyEntry("secret22", aria256, "secretPwd22".toCharArray(), null);
+
+        store1.setKeyEntry("secret23", kmacKey128, "secretPwd23".toCharArray(), null);
+        store1.setKeyEntry("secret24", kmacKey256, "secretPwd24".toCharArray(), null);
 
         checkSecretKey(store1, "secret1", "secretPwd1".toCharArray(), aesKey);
         checkSecretKey(store1, "secret2", "secretPwd2".toCharArray(), edeKey1); // TRIPLEDES and TDEA will convert to DESEDE
         checkSecretKey(store1, "secret3", "secretPwd3".toCharArray(), edeKey1);
         checkSecretKey(store1, "secret4", "secretPwd4".toCharArray(), edeKey1);
-        // TODO:
-//        checkSecretKey(store1, "secret5", "secretPwd5".toCharArray(), hmacKey1);
-//        checkSecretKey(store1, "secret6", "secretPwd6".toCharArray(), hmacKey224);
-//        checkSecretKey(store1, "secret7", "secretPwd7".toCharArray(), hmacKey256);
-//        checkSecretKey(store1, "secret8", "secretPwd8".toCharArray(), hmacKey384);
-//        checkSecretKey(store1, "secret9", "secretPwd9".toCharArray(), hmacKey512);
 
-        checkSecretKey(store1, "secret10", "secretPwd10".toCharArray(), camellia128);
-        checkSecretKey(store1, "secret11", "secretPwd11".toCharArray(), camellia192);
-        checkSecretKey(store1, "secret12", "secretPwd12".toCharArray(), camellia256);
-        checkSecretKey(store1, "secret13", "secretPwd13".toCharArray(), seed);
-        checkSecretKey(store1, "secret14", "secretPwd14".toCharArray(), aria128);
-        checkSecretKey(store1, "secret15", "secretPwd15".toCharArray(), aria192);
-        checkSecretKey(store1, "secret16", "secretPwd16".toCharArray(), aria256);
+        checkSecretKey(store1, "secret5", "secretPwd5".toCharArray(), hmacKey1);
+        checkSecretKey(store1, "secret6", "secretPwd6".toCharArray(), hmacKey224);
+        checkSecretKey(store1, "secret7", "secretPwd7".toCharArray(), hmacKey256);
+        checkSecretKey(store1, "secret8", "secretPwd8".toCharArray(), hmacKey384);
+        checkSecretKey(store1, "secret9", "secretPwd9".toCharArray(), hmacKey512);
+        checkSecretKey(store1, "secret10", "secretPwd10".toCharArray(), hmacKey512_224);
+        checkSecretKey(store1, "secret11", "secretPwd11".toCharArray(), hmacKey512_256);
+
+        checkSecretKey(store1, "secret16", "secretPwd16".toCharArray(), camellia128);
+        checkSecretKey(store1, "secret17", "secretPwd17".toCharArray(), camellia192);
+        checkSecretKey(store1, "secret18", "secretPwd18".toCharArray(), camellia256);
+        checkSecretKey(store1, "secret19", "secretPwd19".toCharArray(), seed);
+        checkSecretKey(store1, "secret20", "secretPwd20".toCharArray(), aria128);
+        checkSecretKey(store1, "secret21", "secretPwd21".toCharArray(), aria192);
+        checkSecretKey(store1, "secret22", "secretPwd22".toCharArray(), aria256);
+
+        checkSecretKey(store1, "secret23", "secretPwd23".toCharArray(), kmacKey128);
+        checkSecretKey(store1, "secret24", "secretPwd24".toCharArray(), kmacKey256);
 
         ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 
@@ -905,14 +930,23 @@ public class BCFKSStoreTest
         checkSecretKey(store2, "secret2", "secretPwd2".toCharArray(), edeKey1); // TRIPLEDES and TDEA will convert to DESEDE
         checkSecretKey(store2, "secret3", "secretPwd3".toCharArray(), edeKey1);
         checkSecretKey(store2, "secret4", "secretPwd4".toCharArray(), edeKey1);
-        // TODO:
-//        checkSecretKey(store2, "secret5", "secretPwd5".toCharArray(), hmacKey1);
-//        checkSecretKey(store2, "secret6", "secretPwd6".toCharArray(), hmacKey224);
-//        checkSecretKey(store2, "secret7", "secretPwd7".toCharArray(), hmacKey256);
-//        checkSecretKey(store2, "secret8", "secretPwd8".toCharArray(), hmacKey384);
-//        checkSecretKey(store2, "secret9", "secretPwd9".toCharArray(), hmacKey512);
+      
+        checkSecretKey(store2, "secret5", "secretPwd5".toCharArray(), hmacKey1);
+        checkSecretKey(store2, "secret6", "secretPwd6".toCharArray(), hmacKey224);
+        checkSecretKey(store2, "secret7", "secretPwd7".toCharArray(), hmacKey256);
+        checkSecretKey(store2, "secret8", "secretPwd8".toCharArray(), hmacKey384);
+        checkSecretKey(store2, "secret9", "secretPwd9".toCharArray(), hmacKey512);
+        checkSecretKey(store2, "secret10", "secretPwd10".toCharArray(), hmacKey512_224);
+        checkSecretKey(store2, "secret11", "secretPwd11".toCharArray(), hmacKey512_256);
+        checkSecretKey(store2, "secret12", "secretPwd12".toCharArray(), hmacKey3_224);
+        checkSecretKey(store2, "secret13", "secretPwd13".toCharArray(), hmacKey3_256);
+        checkSecretKey(store2, "secret14", "secretPwd14".toCharArray(), hmacKey3_384);
+        checkSecretKey(store2, "secret15", "secretPwd15".toCharArray(), hmacKey3_512);
 
-        isTrue("", null == store2.getKey("secret17", new char[0]));
+        checkSecretKey(store2, "secret23", "secretPwd23".toCharArray(), kmacKey128);
+        checkSecretKey(store2, "secret24", "secretPwd24".toCharArray(), kmacKey256);
+
+        isTrue("", null == store2.getKey("secret27", new char[0]));
     }
 
     public void shouldFailOnWrongPassword()
@@ -1093,6 +1127,58 @@ public class BCFKSStoreTest
     {
         checkOneSecretKey(new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0e0f"), "AES"), null);
         checkOneSecretKey(new SecretKeySpec(Hex.decode("000102030405060708090a0b0c0d0e0f"), "AES"), testPassword);
+    }
+
+    // Regression test for https://github.com/bcgit/bc-java/issues/2164
+    public void shouldStoreOnePBEKey()
+        throws Exception
+    {
+        char[] pwd = "secretPassword".toCharArray();
+        byte[] salt = Hex.decode("0001020304050607");
+        int iterations = 4096;
+
+        SecretKeyFactory kFact = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256", "BC");
+        SecretKey pbeKey = kFact.generateSecret(new PBEKeySpec(pwd, salt, iterations, 256));
+
+        isTrue("not a PBEKey", pbeKey instanceof javax.crypto.interfaces.PBEKey);
+        String origAlg = pbeKey.getAlgorithm();
+        byte[] origEncoded = pbeKey.getEncoded();
+
+        KeyStore store1 = KeyStore.getInstance("BCFKS", "BC");
+        store1.load(null, null);
+        store1.setKeyEntry("pbeKey", pbeKey, testPassword, null);
+
+        isTrue("size != 1", 1 == store1.size());
+
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        store1.store(bOut, testPassword);
+
+        KeyStore store2 = KeyStore.getInstance("BCFKS", "BC");
+        store2.load(new ByteArrayInputStream(bOut.toByteArray()), testPassword);
+
+        Key recovered = store2.getKey("pbeKey", testPassword);
+        isTrue("recovered key not a PBEKey", recovered instanceof javax.crypto.interfaces.PBEKey);
+
+        javax.crypto.interfaces.PBEKey rPbe = (javax.crypto.interfaces.PBEKey)recovered;
+        isTrue("password mismatch", Arrays.areEqual(pwd, rPbe.getPassword()));
+        isTrue("salt mismatch", Arrays.areEqual(salt, rPbe.getSalt()));
+        isEquals(iterations, rPbe.getIterationCount());
+        isTrue("algorithm mismatch: " + rPbe.getAlgorithm(), origAlg.equals(rPbe.getAlgorithm()));
+        isTrue("encoded mismatch", Arrays.areEqual(origEncoded, rPbe.getEncoded()));
+
+        // chain must be rejected
+        try
+        {
+            KeyStore badStore = KeyStore.getInstance("BCFKS", "BC");
+            badStore.load(null, null);
+            badStore.setKeyEntry("pbeKey", pbeKey, testPassword, new java.security.cert.Certificate[0]);
+            fail("no exception on PBE key with chain");
+        }
+        catch (KeyStoreException e)
+        {
+            isTrue("unexpected message: " + e.getMessage(),
+                e.getMessage().equals("BCFKS KeyStore cannot store certificate chain with PBE key."));
+        }
     }
 
     private void checkOneSecretKey(SecretKey key, char[] passwd)
@@ -1598,6 +1684,7 @@ public class BCFKSStoreTest
         shouldStoreOnePrivateKey();
         shouldStoreOnePrivateKeyWithChain();
         shouldStoreOneSecretKey();
+        shouldStoreOnePBEKey();
         shouldStoreSecretKeys();
         shouldStoreUsingSCRYPT();
         shouldStoreUsingPBKDF2();

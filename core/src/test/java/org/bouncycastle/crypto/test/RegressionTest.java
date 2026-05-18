@@ -109,6 +109,8 @@ public class RegressionTest
             new XSalsa20Test(),
             new ChaChaTest(),
             new ChaCha20Poly1305Test(),
+            new XChaCha20Test(),
+            new XChaCha20Poly1305Test(),
             new CMacTest(),
             new EAXTest(),
             new GCMTest(),
@@ -195,6 +197,11 @@ public class RegressionTest
             new SparkleTest(),
             new ISAPTest(),
             new ConcatenationKDFTest(),
+            new GiftCofbTest(),
+            new RomulusTest(),
+            new SAKKEKEMSTest(),
+            new LEATest(),
+            new SHA3HMacTest()
         };
 
     public static void main(String[] args)

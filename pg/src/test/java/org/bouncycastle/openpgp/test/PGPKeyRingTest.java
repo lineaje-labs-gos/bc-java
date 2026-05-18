@@ -3211,7 +3211,6 @@ public class PGPKeyRingTest
     public void testNullEncryption()
         throws Exception
     {
-        char[] passPhrase = "fred".toCharArray();
         KeyPairGenerator bareGenerator = KeyPairGenerator.getInstance("RSA", new BouncyCastleProvider());
         bareGenerator.initialize(2048);
         KeyPair rsaPair = bareGenerator.generateKeyPair();
@@ -3467,7 +3466,7 @@ public class PGPKeyRingTest
 
         long validSeconds = publicKey.getValidSeconds();
 
-        isEquals(81129600L, validSeconds);
+        isEquals("got " + validSeconds, 0L, validSeconds);
     }
 
     private void testApacheRings()

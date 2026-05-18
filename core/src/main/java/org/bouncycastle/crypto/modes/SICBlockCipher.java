@@ -41,6 +41,7 @@ public class SICBlockCipher
      * @param c the block cipher to be used.
      * @deprecated use newInstance() method.
      */
+    @Deprecated
     public SICBlockCipher(BlockCipher c)
     {
         super(c);
@@ -241,10 +242,8 @@ public class SICBlockCipher
     private void incrementCounter(int offSet)
     {
         byte old = counter[counter.length - 1];
-
-        counter[counter.length - 1] += offSet;
-
-        if (old != 0 && counter[counter.length - 1] < old)
+        counter[counter.length - 1] += (byte) offSet;
+        if ((old & 0xff) + offSet > 255)
         {
             incrementCounterAt(1);
         }

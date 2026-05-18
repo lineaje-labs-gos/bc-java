@@ -1,5 +1,7 @@
 package org.bouncycastle.crypto.generators;
 
+import java.util.concurrent.LinkedBlockingQueue;
+
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.params.Argon2Parameters;
@@ -24,7 +26,7 @@ public class Argon2BytesGenerator
 
     /* Minimum and maximum number of lanes (degree of parallelism) */
     private static final int MIN_PARALLELISM = 1;
-    private static final int MAX_PARALLELISM = 16777216;
+    private static final int MAX_PARALLELISM = (1 << 24) - 1;
 
     /* Minimum and maximum digest size in bytes */
     private static final int MIN_OUTLEN = 4;
@@ -37,6 +39,8 @@ public class Argon2BytesGenerator
     private static final byte[] ZERO_BYTES = new byte[4];
 
     private Argon2Parameters parameters;
+    private BlockPool pool;
+    private int memoryBlocks;
     private Block[] memory;
     private int segmentLength;
     private int laneLength;
@@ -52,26 +56,47 @@ public class Argon2BytesGenerator
      */
     public void init(Argon2Parameters parameters)
     {
+        if (parameters.getVersion() != Argon2Parameters.ARGON2_VERSION_10 &&
+            parameters.getVersion() != Argon2Parameters.ARGON2_VERSION_13)
+        {
+            throw new UnsupportedOperationException("unknown Argon2 version");
+        }
+        if (parameters.getType() != Argon2Parameters.ARGON2_d &&
+            parameters.getType() != Argon2Parameters.ARGON2_i &&
+            parameters.getType() != Argon2Parameters.ARGON2_id)
+        {
+            throw new UnsupportedOperationException("unknown Argon2 type");
+        }
+
+        if (parameters.getLanes() < MIN_PARALLELISM)
+        {
+            throw new IllegalStateException("lanes must be at least " + MIN_PARALLELISM);
+        }
+        else if (parameters.getLanes() > MAX_PARALLELISM)
+        {
+            throw new IllegalStateException("lanes must be at most " + MAX_PARALLELISM);
+        }
+        else if (parameters.getIterations() < MIN_ITERATIONS)
+        {
+            throw new IllegalStateException("iterations is less than: " + MIN_ITERATIONS);
+        }
+
         this.parameters = parameters;
 
-        if (parameters.getLanes() < Argon2BytesGenerator.MIN_PARALLELISM)
-        {
-            throw new IllegalStateException("lanes must be greater than " + Argon2BytesGenerator.MIN_PARALLELISM);
-        }
-        else if (parameters.getLanes() > Argon2BytesGenerator.MAX_PARALLELISM)
-        {
-            throw new IllegalStateException("lanes must be less than " + Argon2BytesGenerator.MAX_PARALLELISM);
-        }
-        else if (parameters.getMemory() < 2 * parameters.getLanes())
-        {
-            throw new IllegalStateException("memory is less than: " + (2 * parameters.getLanes()) + " expected " + (2 * parameters.getLanes()));
-        }
-        else if (parameters.getIterations() < Argon2BytesGenerator.MIN_ITERATIONS)
-        {
-            throw new IllegalStateException("iterations is less than: " + Argon2BytesGenerator.MIN_ITERATIONS);
-        }
+        // 2. Align memory size
+        // Minimum memoryBlocks = 8L blocks, where L is the number of lanes
+        int memoryBlocks = Math.max(parameters.getMemory(), 2 * ARGON2_SYNC_POINTS * parameters.getLanes());
 
-        doInit(parameters);
+        this.segmentLength = memoryBlocks / (ARGON2_SYNC_POINTS * parameters.getLanes());
+        this.laneLength = segmentLength * ARGON2_SYNC_POINTS;
+
+        // Ensure that all segments have equal length
+        memoryBlocks = parameters.getLanes() * laneLength;
+        this.memoryBlocks = memoryBlocks;
+
+        BlockPool configured = parameters.getBlockPool();
+        // if no pool is provided hold on to enough blocks for the primary memory
+        this.pool = (configured != null) ? configured : new FixedBlockPool(memoryBlocks);
     }
 
     public int generateBytes(char[] password, byte[] out)
@@ -91,13 +116,14 @@ public class Argon2BytesGenerator
 
     public int generateBytes(byte[] password, byte[] out, int outOff, int outLen)
     {
-        if (outLen < Argon2BytesGenerator.MIN_OUTLEN)
+        if (outLen < MIN_OUTLEN)
         {
-            throw new IllegalStateException("output length less than " + Argon2BytesGenerator.MIN_OUTLEN);
+            throw new IllegalStateException("output length less than " + MIN_OUTLEN);
         }
 
         byte[] tmpBlockBytes = new byte[ARGON2_BLOCK_SIZE];
 
+        allocateMemory();
         initialize(tmpBlockBytes, password, outLen);
         fillMemoryBlocks();
         digest(tmpBlockBytes, out, outOff, outLen);
@@ -107,10 +133,20 @@ public class Argon2BytesGenerator
         return outLen;
     }
 
-    // Clear memory.
+    // Allocate primary memory from the configured BlockPool.
+    private void allocateMemory()
+    {
+        this.memory = new Block[memoryBlocks];
+
+        for (int i = 0; i < memory.length; i++)
+        {
+            memory[i] = pool.allocate();
+        }
+    }
+
+    // Return primary memory to the BlockPool.
     private void reset()
     {
-        // Reset memory.
         if (null != memory)
         {
             for (int i = 0; i < memory.length; i++)
@@ -118,45 +154,16 @@ public class Argon2BytesGenerator
                 Block b = memory[i];
                 if (null != b)
                 {
-                    b.clear();
+                    pool.deallocate(b);
                 }
             }
         }
-    }
-
-    private void doInit(Argon2Parameters parameters)
-    {
-        /* 2. Align memory size */
-        /* Minimum memoryBlocks = 8L blocks, where L is the number of lanes */
-        int memoryBlocks = parameters.getMemory();
-
-        if (memoryBlocks < 2 * Argon2BytesGenerator.ARGON2_SYNC_POINTS * parameters.getLanes())
-        {
-            memoryBlocks = 2 * Argon2BytesGenerator.ARGON2_SYNC_POINTS * parameters.getLanes();
-        }
-
-        this.segmentLength = memoryBlocks / (parameters.getLanes() * Argon2BytesGenerator.ARGON2_SYNC_POINTS);
-        this.laneLength = segmentLength * Argon2BytesGenerator.ARGON2_SYNC_POINTS;
-
-        /* Ensure that all segments have equal length */
-        memoryBlocks = segmentLength * (parameters.getLanes() * Argon2BytesGenerator.ARGON2_SYNC_POINTS);
-
-        initMemory(memoryBlocks);
-    }
-
-    private void initMemory(int memoryBlocks)
-    {
-        this.memory = new Block[memoryBlocks];
-
-        for (int i = 0; i < memory.length; i++)
-        {
-            memory[i] = new Block();
-        }
+        memory = null;
     }
 
     private void fillMemoryBlocks()
     {
-        FillBlock filler = new FillBlock();
+        FillBlock filler = new FillBlock(pool);
         Position position = new Position();
         for (int pass = 0; pass < parameters.getIterations(); ++pass)
         {
@@ -174,6 +181,7 @@ public class Argon2BytesGenerator
                 }
             }
         }
+        filler.deallocate(pool);
     }
 
     private void fillSegment(FillBlock filler, Position position)
@@ -553,11 +561,27 @@ public class Argon2BytesGenerator
 
     private static class FillBlock
     {
-        Block R = new Block();
-        Block Z = new Block();
+        final Block R;
+        final Block Z;
 
-        Block addressBlock = new Block();
-        Block inputBlock = new Block();
+        final Block addressBlock;
+        final Block inputBlock;
+
+        FillBlock(BlockPool pool)
+        {
+            R = pool.allocate();
+            Z = pool.allocate();
+            addressBlock = pool.allocate();
+            inputBlock = pool.allocate();
+        }
+
+        void deallocate(BlockPool pool)
+        {
+            pool.deallocate(addressBlock);
+            pool.deallocate(inputBlock);
+            pool.deallocate(R);
+            pool.deallocate(Z);
+        }
 
         private void applyBlake()
         {
@@ -618,14 +642,19 @@ public class Argon2BytesGenerator
         }
     }
 
-    private static class Block
+    /**
+     * A single 1024-byte memory block used by the Argon2 mixing function.
+     * Made public so callers can supply their own {@link BlockPool}
+     * implementations - see {@link Argon2Parameters.Builder#withBlockPool}.
+     */
+    public static class Block
     {
         private static final int SIZE = ARGON2_QWORDS_IN_BLOCK;
 
         /* 128 * 8 Byte QWords */
         private final long[] v;
 
-        private Block()
+        public Block()
         {
             v = new long[SIZE];
         }
@@ -682,7 +711,7 @@ public class Argon2BytesGenerator
             }
         }
 
-        public Block clear()
+        private Block clear()
         {
             Arrays.fill(v, 0);
             return this;
@@ -697,6 +726,60 @@ public class Argon2BytesGenerator
 
         Position()
         {
+        }
+    }
+
+    /**
+     * Strategy for allocating and recycling Argon2 {@link Block} objects.
+     * <p>
+     * An implementation may simply return fresh blocks from
+     * {@link #allocate()} (the default behaviour) or pool them so the
+     * underlying {@code long[]} buffers can be reused across successive
+     * {@code generateBytes} calls. Implementations must accept matching
+     * allocate/deallocate pairs - the generator does not guard against
+     * double-deallocation of the same block.
+     */
+    public static interface BlockPool
+    {
+        Block allocate();
+
+        void deallocate(Block block);
+    }
+
+    /**
+     * Bounded pool that recycles up to {@code maxBlocks} {@link Block} objects.
+     * Excess blocks returned via {@link #deallocate(Block)} are dropped and
+     * left for the garbage collector. Returned blocks are zeroised both on
+     * deallocation and again on allocation, so a recycled block is never
+     * observed with stale data.
+     */
+    public static class FixedBlockPool
+        implements BlockPool
+    {
+        private final LinkedBlockingQueue<Block> blocks;
+
+        public FixedBlockPool(int maxBlocks)
+        {
+            this.blocks = new LinkedBlockingQueue<Block>(maxBlocks);
+        }
+
+        public Block allocate()
+        {
+            Block block = blocks.poll();
+            if (block == null)
+            {
+                return new Block();
+            }
+            // a deallocate() in another thread may not have published its clear()
+            // - re-clear here so callers see a zeroised block.
+            block.clear();
+            return block;
+        }
+
+        public void deallocate(Block block)
+        {
+            block.clear();
+            blocks.offer(block);
         }
     }
 }

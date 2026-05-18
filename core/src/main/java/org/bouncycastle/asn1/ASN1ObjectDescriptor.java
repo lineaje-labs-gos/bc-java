@@ -2,6 +2,8 @@ package org.bouncycastle.asn1;
 
 import java.io.IOException;
 
+import org.bouncycastle.util.Exceptions;
+
 public final class ASN1ObjectDescriptor
     extends ASN1Primitive
 {
@@ -49,7 +51,7 @@ public final class ASN1ObjectDescriptor
             }
             catch (IOException e)
             {
-                throw new IllegalArgumentException("failed to construct object descriptor from byte[]: " + e.getMessage());
+                throw Exceptions.illegalArgumentException("failed to construct object descriptor from byte[]", e);
             }
         }
 
@@ -60,14 +62,19 @@ public final class ASN1ObjectDescriptor
      * Return an ObjectDescriptor from a tagged object.
      *
      * @param taggedObject the tagged object holding the object we want.
-     * @param explicit     true if the object is meant to be explicitly tagged,
+     * @param declaredExplicit true if the object is meant to be explicitly tagged,
      *                     false otherwise.
      * @exception IllegalArgumentException if the tagged object cannot be converted.
      * @return an ASN1ObjectDescriptor instance, or null.
      */
-    public static ASN1ObjectDescriptor getInstance(ASN1TaggedObject taggedObject, boolean explicit)
+    public static ASN1ObjectDescriptor getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
     {
-        return (ASN1ObjectDescriptor)TYPE.getContextInstance(taggedObject, explicit);
+        return (ASN1ObjectDescriptor)TYPE.getContextTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1ObjectDescriptor getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1ObjectDescriptor)TYPE.getTagged(taggedObject, declaredExplicit);
     }
 
     private final ASN1GraphicString baseGraphicString;

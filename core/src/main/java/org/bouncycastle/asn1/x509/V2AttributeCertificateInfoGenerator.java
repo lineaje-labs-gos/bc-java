@@ -43,8 +43,8 @@ public class V2AttributeCertificateInfoGenerator
 
     public V2AttributeCertificateInfoGenerator()
     {
-        this.version = new ASN1Integer(1);
-        attributes = new ASN1EncodableVector();
+        this.version = ASN1Integer.ONE;
+        this.attributes = new ASN1EncodableVector();
     }
     
     public void setHolder(Holder holder)
@@ -124,6 +124,10 @@ public class V2AttributeCertificateInfoGenerator
             || (holder == null) || (attributes == null))
         {
             throw new IllegalStateException("not all mandatory fields set in V2 AttributeCertificateInfo generator");
+        }
+        if (AttributeCertificateInfo.isEmptyIssuer(issuer))
+        {
+            throw new IllegalStateException("issuer is empty");
         }
 
         ASN1EncodableVector  v = new ASN1EncodableVector(9);

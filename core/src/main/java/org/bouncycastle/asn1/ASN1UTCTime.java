@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.SimpleTimeZone;
 
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Exceptions;
 import org.bouncycastle.util.Strings;
 
 /**
@@ -83,14 +84,19 @@ public class ASN1UTCTime
      * Return an UTC Time from a tagged object.
      *
      * @param taggedObject the tagged object holding the object we want
-     * @param explicit     true if the object is meant to be explicitly tagged false
+     * @param declaredExplicit true if the object is meant to be explicitly tagged false
      *                     otherwise.
      * @exception IllegalArgumentException if the tagged object cannot be converted.
      * @return an ASN1UTCTime instance, or null.
      */
-    public static ASN1UTCTime getInstance(ASN1TaggedObject taggedObject, boolean explicit)
+    public static ASN1UTCTime getInstance(ASN1TaggedObject taggedObject, boolean declaredExplicit)
     {
-        return (ASN1UTCTime)TYPE.getContextInstance(taggedObject, explicit);
+        return (ASN1UTCTime)TYPE.getContextTagged(taggedObject, declaredExplicit);
+    }
+
+    public static ASN1UTCTime getTagged(ASN1TaggedObject taggedObject, boolean declaredExplicit)
+    {
+        return (ASN1UTCTime)TYPE.getTagged(taggedObject, declaredExplicit);
     }
 
     final byte[] contents;
@@ -115,7 +121,7 @@ public class ASN1UTCTime
         }
         catch (ParseException e)
         {
-            throw new IllegalArgumentException("invalid date string: " + e.getMessage());
+            throw Exceptions.illegalArgumentException("invalid date string", e);
         }
     }
 

@@ -1,6 +1,6 @@
 
 plugins {
-  id "biz.aQute.bnd.builder" version "7.0.0"
+  id "biz.aQute.bnd.builder" version "7.1.0"
 }
 
 sourceSets {
@@ -13,7 +13,6 @@ sourceSets {
 
 
 dependencies {
-    implementation project(':core')
     implementation project(':prov')
     implementation project(':util')
 
@@ -26,23 +25,63 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
 }
 
-compileJava {
-    javaCompiler = javaToolchains.compilerFor {
-        languageVersion = JavaLanguageVersion.of(17)
+evaluationDependsOn(":prov")
+evaluationDependsOn(":util")
+
+// Stamp the current project version into the BCPG default-version string in
+// ArmoredOutputStream and the matching PGP-armored test inputs. Operates in
+// place (no generated-src copy) and is idempotent: files are only rewritten
+// when their stamped content actually differs, so a clean checkout matching
+// the gradle version produces no working-tree diff and downstream compile
+// tasks stay UP-TO-DATE.
+//
+// The stamped set is explicit rather than tree-walked because several test
+// classes pin historical BCPG version strings (e.g. v1.32, v1.68) as parser
+// fixtures and must not be rewritten.
+task stampVersion {
+    description = 'Stamps the current project version into ArmoredOutputStream and the matching PGP-armored test inputs.'
+
+    doLast {
+        def stamp = "BCPG v${version}".toString()
+        def pattern = ~/BCPG v\d+(?:\.\d+){1,2}(?:-SNAPSHOT)?/
+
+        def filesToStamp = [
+            file('src/main/java/org/bouncycastle/bcpg/ArmoredOutputStream.java'),
+            file('src/main/jdk1.4/org/bouncycastle/bcpg/ArmoredOutputStream.java'),
+            file('src/test/java/org/bouncycastle/openpgp/test/ECDSAKeyPairTest.java'),
+            file('src/test/java/org/bouncycastle/openpgp/test/PGPv6SignatureTest.java'),
+            file('src/test/java/org/bouncycastle/bcpg/test/BCPGOutputStreamTest.java')
+        ]
+
+        filesToStamp.each { f ->
+            def text = f.text
+            def updated = pattern.matcher(text).replaceAll(stamp)
+            if (updated != text) {
+                f.text = updated
+                logger.lifecycle("Stamped ${stamp} into ${f}")
+            }
+        }
     }
-    targetCompatibility = 1.8;
-    sourceCompatibility = 1.8;
+}
+
+compileJava.dependsOn stampVersion
+compileTestJava.dependsOn stampVersion
+
+compileJava {
+
+    options.release = 8
 }
 
 
 compileJava9Java {
-    javaCompiler = javaToolchains.compilerFor {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
-    sourceCompatibility = 9
-    targetCompatibility = 9
+
+    options.release = 9
+
+    def prov_jar="${project(":prov").jar.outputs.files.getFiles().getAt(0)}"
+    def util_jar="${project(":util").jar.outputs.files.getFiles().getAt(0)}"
+
     options.compilerArgs += [
-          '--module-path', "${bc_prov}${File.pathSeparator}${bc_util}"
+            '--module-path', "${prov_jar}${File.pathSeparator}${util_jar}"
     ]
 
     options.sourcepath = files(['src/main/java', 'src/main/jdk1.9'])
@@ -52,7 +91,10 @@ compileJava9Java {
 jar.archiveBaseName = "bcpg-$vmrange"
 
 
+
 task sourcesJar(type: Jar) {
+    dependsOn stampVersion
+
     archiveBaseName = jar.archiveBaseName
     archiveClassifier = 'sources'
     from sourceSets.main.allSource
@@ -75,6 +117,11 @@ jar {
     manifest.attributes('Export-Package': "org.bouncycastle.{apache|bcpg|gpg|openpgp}.*;version=${v}")
     manifest.attributes('Import-Package': "java.*;resolution:=optional,javax.*;resolution:=optional,!org.bouncycastle.{apache|bcpg|gpg|openpgp|}.*,org.bouncycastle.*;version=\"[${v},${maxVersion})\"")
     manifest.attributes('Bundle-Version': "${v}")
+    manifest.attributes('Permissions': 'all-permissions')
+    manifest.attributes('Codebase': '*')
+    manifest.attributes('Application-Library-Allowable-Codebase': '*')
+    manifest.attributes('Caller-Allowable-Codebase': '*') 
+    manifest.attributes('Trusted-Library': 'true')
 }
 
 
@@ -93,5 +140,24 @@ artifacts {
 test {
     forkEvery = 1;
     maxParallelForks = 8;
+    maxHeapSize = "3g";
+    jvmArgs = ['-Dtest.java.version.prefix=any']
 }
 
+compileJava9Java.dependsOn([":prov:jar", ":util:jar"])
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'org.bouncycastle'
+            artifactId = "bcpg-$vmrange"
+            from components.java
+
+
+            artifact(javadocJar)
+            artifact(sourcesJar)
+        }
+
+
+    }
+}

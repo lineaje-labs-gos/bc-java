@@ -29,11 +29,13 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.cms.ContentInfo;
+import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.KeyPurposeId;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x9.ECNamedCurveTable;
 import org.bouncycastle.asn1.x9.X9ECParameters;
+import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.jcajce.interfaces.EdDSAPrivateKey;
 import org.bouncycastle.jcajce.interfaces.EdDSAPublicKey;
@@ -41,6 +43,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.CertificateTrustBlock;
 import org.bouncycastle.openssl.PEMDecryptorProvider;
 import org.bouncycastle.openssl.PEMEncryptedKeyPair;
+import org.bouncycastle.openssl.PEMEncryptor;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.X509TrustedCertificateBlock;
@@ -49,9 +52,13 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.openssl.jcajce.JceOpenSSLPKCS8DecryptorProviderBuilder;
 import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
+import org.bouncycastle.openssl.jcajce.JcePEMEncryptorBuilder;
 import org.bouncycastle.operator.InputDecryptorProvider;
 import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
+import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Strings;
+import org.bouncycastle.util.encoders.Base64;
+import org.bouncycastle.util.encoders.Hex;
 import org.bouncycastle.util.test.SimpleTest;
 
 /**
@@ -165,6 +172,21 @@ public class ParserTest
         }
 
         //
+        // Check for algorithm replacement
+        //
+        pair = new JcaPEMKeyConverter().setProvider("BC").setAlgorithmMapping(X9ObjectIdentifiers.id_ecPublicKey, "EC").getKeyPair(pemPair);
+
+        if (!pair.getPublic().getAlgorithm().equals("EC"))
+        {
+            fail("wrong algorithm name on public got: " + pair.getPublic().getAlgorithm());
+        }
+
+        if (!pair.getPrivate().getAlgorithm().equals("EC"))
+        {
+            fail("wrong algorithm name on private");
+        }
+
+        //
         // ECKey -- explicit parameters
         //
         pemRd = openPEMResource("ecexpparam.pem");
@@ -255,24 +277,24 @@ public class ParserTest
         doOpenSslDsaTest("rc2_64_cbc");
         doOpenSslRsaTest("rc2_64_cbc");
 
-        doDudPasswordTest("7fd98", 0, "corrupted stream - out of bounds length found: 599005160 >= 19");
-        doDudPasswordTest("ef677", 1, "corrupted stream - out of bounds length found: 2087569732 >= 66");
+        doDudPasswordTest("7fd98", 0, "corrupted stream - out of bounds length found: 599005160 > 19");
+        doDudPasswordTest("ef677", 1, "corrupted stream - out of bounds length found: 2087569732 > 66");
         doDudPasswordTest("800ce", 2, "unknown tag 26 encountered");
         doDudPasswordTest("b6cd8", 3, "DEF length 81 object truncated by 56");
         doDudPasswordTest("28ce09", 4, "corrupted stream - high tag number < 31 found");
         doDudPasswordTest("2ac3b9", 5, "long form definite-length more than 31 bits");
-        doDudPasswordTest("2cba96", 6, "corrupted stream - out of bounds length found: 100 >= 67");
-        doDudPasswordTest("2e3354", 7, "corrupted stream - out of bounds length found: 42 >= 35");
-        doDudPasswordTest("2f4142", 8, "long form definite-length more than 31 bits");
+        doDudPasswordTest("2cba96", 6, "corrupted stream - out of bounds length found: 100 > 67");
+        doDudPasswordTest("2e3354", 7, "corrupted stream - out of bounds length found: 42 > 35");
+        doDudPasswordTest("2f4142", 8, "corrupted stream - out of bounds length found: 127 > 39");
         doDudPasswordTest("2fe9bb", 9, "long form definite-length more than 31 bits");
         doDudPasswordTest("3ee7a8", 10, "long form definite-length more than 31 bits");
         doDudPasswordTest("41af75", 11, "unknown tag 16 encountered");
-        doDudPasswordTest("1704a5", 12, "failed to construct sequence from byte[]: BOOLEAN value should have 1 byte in it");
+        doDudPasswordTest("1704a5", 12, "BOOLEAN value should have 1 byte in it");
         doDudPasswordTest("1c5822", 13, "Extra data detected in stream");
-        doDudPasswordTest("5a3d16", 14, "failed to construct sequence from byte[]: truncated BIT STRING detected");
-        doDudPasswordTest("8d0c97", 15, "corrupted stream detected");
-        doDudPasswordTest("bc0daf", 16, "failed to construct sequence from byte[]: BOOLEAN value should have 1 byte in it");
-        doDudPasswordTest("aaf9c4d", 17, "corrupted stream - out of bounds length found: 1580418590 >= 447");
+        doDudPasswordTest("5a3d16", 14, "truncated BIT STRING detected");
+        doDudPasswordTest("8d0c97", 15, "too few objects in input sequence");
+        doDudPasswordTest("bc0daf", 16, "BOOLEAN value should have 1 byte in it");
+        doDudPasswordTest("aaf9c4d", 17, "unknown DL object encountered: 0x15");
 
         doNoPasswordTest();
         doNoECPublicKeyTest();
@@ -362,6 +384,97 @@ public class ParserTest
 
         doOpenSslGost2012Test();
         doParseAttrECKeyTest();
+        doLegacyEncryptedPkcs8PemTest();
+        doLegacyEncryptedPkcs8GenPemTest();
+    }
+
+    private void doLegacyEncryptedPkcs8PemTest()
+         throws Exception
+     {
+         char[] password = "Vjvyhfngz0MCUs$kwOF0".toCharArray();
+
+         String pem = "-----BEGIN PRIVATE KEY-----\n"
+         + "Proc-Type: 4,ENCRYPTED\n"
+         + "DEK-Info: AES-128-CBC,b619a06a16b7b7a6436579f06a14f45e\n"
+         + "\n"
+         + "QmysBFzoMkgvVTM39kvHjkKhcBjK6PVMZ6a/taF44ZXeOl3t5DUp4EWxyfs8htng\n"
+         + "tjsKIb0yKJigIZGrCeHROQ==\n"
+         + "-----END PRIVATE KEY-----\n";
+
+         PEMParser parser = new PEMParser(new StringReader(pem.toString()));
+         Object o = parser.readObject();
+
+         if (!(o instanceof PEMEncryptedKeyPair))
+         {
+             fail("expected PEMEncryptedKeyPair, got " + (o == null ? "null" : o.getClass().getName()));
+         }
+
+         PEMDecryptorProvider decProv = new JcePEMDecryptorProviderBuilder()
+             .setProvider("BC").build(password);
+         PEMKeyPair pkp = ((PEMEncryptedKeyPair)o).decryptKeyPair(decProv);
+
+         PrivateKeyInfo decoded = pkp.getPrivateKeyInfo();
+         if (decoded == null)
+         {
+             fail("decrypted PrivateKeyInfo was null");
+         }
+         isEquals(EdECObjectIdentifiers.id_Ed25519, decoded.getPrivateKeyAlgorithm().getAlgorithm());
+     }
+
+    private void doLegacyEncryptedPkcs8GenPemTest()
+        throws Exception
+    {
+        // Reproduces github #1238: a PKCS#8 PrivateKeyInfo wrapped in OpenSSL legacy
+        // encryption headers ("Proc-Type: 4,ENCRYPTED" / "DEK-Info") under a
+        // "BEGIN PRIVATE KEY" label. Earlier releases tried to ASN.1-parse the
+        // ciphertext and failed with "corrupted stream" before this could be
+        // recognised as encrypted.
+        char[] password = "wibble".toCharArray();
+
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519", "BC");
+        KeyPair kp = kpg.generateKeyPair();
+
+        byte[] pkcs8 = kp.getPrivate().getEncoded();
+
+        PEMEncryptor encryptor = new JcePEMEncryptorBuilder("AES-128-CBC")
+            .setProvider("BC").build(password);
+
+        byte[] encrypted = encryptor.encrypt(pkcs8);
+        String ivHex = Strings.fromByteArray(Hex.encode(encryptor.getIV()));
+        String b64 = Strings.fromByteArray(Base64.encode(encrypted));
+
+        StringBuilder pem = new StringBuilder();
+        pem.append("-----BEGIN PRIVATE KEY-----\n");
+        pem.append("Proc-Type: 4,ENCRYPTED\n");
+        pem.append("DEK-Info: AES-128-CBC,").append(ivHex).append("\n");
+        pem.append("\n");
+        for (int i = 0; i < b64.length(); i += 64)
+        {
+            pem.append(b64, i, Math.min(i + 64, b64.length())).append("\n");
+        }
+        pem.append("-----END PRIVATE KEY-----\n");
+
+        PEMParser parser = new PEMParser(new StringReader(pem.toString()));
+        Object o = parser.readObject();
+
+        if (!(o instanceof PEMEncryptedKeyPair))
+        {
+            fail("expected PEMEncryptedKeyPair, got " + (o == null ? "null" : o.getClass().getName()));
+        }
+
+        PEMDecryptorProvider decProv = new JcePEMDecryptorProviderBuilder()
+            .setProvider("BC").build(password);
+        PEMKeyPair pkp = ((PEMEncryptedKeyPair)o).decryptKeyPair(decProv);
+
+        PrivateKeyInfo decoded = pkp.getPrivateKeyInfo();
+        if (decoded == null)
+        {
+            fail("decrypted PrivateKeyInfo was null");
+        }
+        if (!Arrays.areEqual(pkcs8, decoded.getEncoded()))
+        {
+            fail("decrypted PrivateKeyInfo did not round-trip");
+        }
     }
 
     private void checkTrustedCert(X509TrustedCertificateBlock trusted)
@@ -569,13 +682,16 @@ public class ParserTest
         }
         catch (IOException e)
         {
-            if (e.getCause() != null && !e.getCause().getMessage().endsWith(message))
+            // Find the ultimate cause
+            Throwable uc = e;
+            while (uc.getCause() != null)
             {
-               fail("issue " + index + " exception thrown, but wrong message: " + e.getCause().getMessage());
+                uc = uc.getCause();
             }
-            else if (e.getCause() == null && !e.getMessage().equals(message))
+
+            if (!uc.getMessage().equals(message))
             {
-               fail("issue " + index + " exception thrown, but wrong message");
+                fail("issue " + index + " exception thrown, but wrong message: " + uc.getMessage() + " expected: " + message);
             }
         }
     }
